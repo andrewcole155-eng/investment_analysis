@@ -21,13 +21,14 @@ holding_period = st.sidebar.slider("Holding Period (Years)", 1, 30, 10)
 
 # --- 2. CREATE TABS ---
 # We define the tabs here, then fill them sequentially so variables pass down correctly.
-tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
     "Property & Acquisition", 
     "Income & Expenses", 
     "Loan Details", 
     "Depreciation", 
     "Tax & Gearing", 
-    "10-Year Projections"
+    "10-Year Projections",
+    "CGT Projection"
 ])
 
 # --- TAB 1: ACQUISITION ---
