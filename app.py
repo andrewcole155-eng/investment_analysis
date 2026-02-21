@@ -229,13 +229,15 @@ s2_freq = col_s2_freq.selectbox(
 # --- Mapping for annualization ---
 freq_map = {"Monthly": 12, "Fortnightly": 26, "Annually": 1}
 
-# These are the variables your PDF and Tab logic now require
+# Standardize to Annual for the math engine and PDF
 salary_1_annual = s1_input * freq_map[s1_freq]
 salary_2_annual = s2_input * freq_map[s2_freq]
 
-# We define these as well so your Tab 6 and Tab 10 calculations don't break
+# Define these aliases to ensure existing Tab 6 calculations don't break
 salary_1 = salary_1_annual
 salary_2 = salary_2_annual
+annual_net_1 = salary_1_annual # Fixes the error at line 657
+annual_net_2 = salary_2_annual
 
 ownership_split_val = st.sidebar.slider("Ownership Split (Inv 1 %)", 0, 100, st.session_state.form_data["split"])
 ownership_split = ownership_split_val / 100
@@ -891,7 +893,9 @@ def generate_pdf(salary_1_annual, salary_2_annual, total_monthly_living, total_e
     return bytes(pdf.output())
 
 # --- DOWNLOAD BUTTON ---
+# Pass the required variables into the function here
 pdf_bytes = generate_pdf(salary_1_annual, salary_2_annual, total_monthly_living, total_existing_debt_m)
+
 st.download_button(
     label="⬇️ Download Full Summary PDF",
     data=pdf_bytes,
@@ -901,8 +905,8 @@ st.download_button(
     args=(property_name, property_url, {
         "purchase_price": purchase_price,
         "beds": beds, "baths": baths, "cars": cars,
-        "salary_1": salary_1,         # This is now the calculated annual figure
-        "salary_2": salary_2,         # This is now the calculated annual figure
+        "salary_1": salary_1,
+        "salary_2": salary_2,
         "ownership_split": ownership_split,
         "growth_rate": growth_rate,
         "holding_period": holding_period,
