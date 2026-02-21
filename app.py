@@ -229,14 +229,14 @@ s2_freq = col_s2_freq.selectbox(
 # --- Mapping for annualization ---
 freq_map = {"Monthly": 12, "Fortnightly": 26, "Annually": 1}
 
-# Standardize to Annual for the math engine and PDF
+# Use these exact variable names
 salary_1_annual = s1_input * freq_map[s1_freq]
 salary_2_annual = s2_input * freq_map[s2_freq]
 
-# Define these aliases to ensure existing Tab 6 calculations don't break
+# Define these for existing Tab logic
 salary_1 = salary_1_annual
 salary_2 = salary_2_annual
-annual_net_1 = salary_1_annual # Fixes the error at line 657
+annual_net_1 = salary_1_annual 
 annual_net_2 = salary_2_annual
 
 ownership_split_val = st.sidebar.slider("Ownership Split (Inv 1 %)", 0, 100, st.session_state.form_data["split"])
@@ -695,12 +695,6 @@ with tab10:
 st.markdown("---")
 st.subheader("📄 Export Analysis Report")
 
-The link disappeared because the conditional logic in the generate_pdf function only displays it if the property_url strictly matches a specific format. Since we updated the variable names and the function structure, the variable containing that URL wasn't reaching the header correctly.
-
-Here is the fully integrated generate_pdf function. This version restores the Listing Link, updates the Household Profile to reflect your actual Take-Home Pay, and includes the Negative Gearing Benefit as a separate highlight so the tax profile remains useful rather than obsolete.
-
-Updated generate_pdf Function
-Python
 def generate_pdf(salary_1_annual, salary_2_annual, total_monthly_living, total_existing_debt_m):
     # Fetch AI Market Yield Data
     market_yield = fetch_market_yield(property_name, beds, baths, cars)
@@ -747,13 +741,13 @@ def generate_pdf(salary_1_annual, salary_2_annual, total_monthly_living, total_e
     pdf = InvestmentReportPDF()
     pdf.add_page()
     
-    # --- 1. PROPERTY HEADER (Restored Link) ---
+    # --- 1. PROPERTY HEADER ---
     pdf.set_font("helvetica", "B", 16)
     pdf.cell(0, 8, property_name, new_x="LMARGIN", new_y="NEXT")
     pdf.set_font("helvetica", "", 11)
     pdf.cell(0, 7, f"Configuration: {beds} Bed | {baths} Bath | {cars} Car", new_x="LMARGIN", new_y="NEXT")
     
-    # Restored link logic
+    # Link logic restored
     if property_url and property_url.strip() != "" and property_url != "https://www.realestate.com.au/":
         pdf.set_font("helvetica", "U", 9)
         pdf.set_text_color(0, 102, 204) 
@@ -766,10 +760,10 @@ def generate_pdf(salary_1_annual, salary_2_annual, total_monthly_living, total_e
     pdf.row("Inv 1 Take-Home (Annual):", f"${salary_1_annual:,.0f}", "Ownership Split:", f"{ownership_split*100:.0f}% / {(1-ownership_split)*100:.0f}%")
     pdf.row("Inv 2 Take-Home (Annual):", f"${salary_2_annual:,.0f}", "Annual Depreciation:", f"${total_depreciation:,.0f}")
     
-    # Gearing Benefit Highlight
+    # Tax Benefit Highlight (Keeping the tax profile relevant)
     pdf.set_font("helvetica", "I", 10)
     pdf.set_text_color(0, 102, 204)
-    pdf.cell(0, 7, f"Est. Additional Annual Tax Refund (Negative Gearing): ${total_tax_variance:,.2f}", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 7, f"Est. Additional Annual Tax Refund (Gearing): ${total_tax_variance:,.2f}", new_x="LMARGIN", new_y="NEXT")
     pdf.set_text_color(0, 0, 0)
     pdf.ln(3)
 
@@ -783,7 +777,7 @@ def generate_pdf(salary_1_annual, salary_2_annual, total_monthly_living, total_e
     pdf.section_header("Monthly Household Serviceability")
     
     total_household_net_m = (salary_1_annual + salary_2_annual) / 12
-    shaded_rent_m = (monthly_rent * 0.80)
+    shaded_rent_m = (monthly_rent * 0.80) # Bank 80% rule
     new_mortgage_m = monthly_io if loan_type == "Interest Only" else monthly_pi
     
     monthly_inflow = total_household_net_m + shaded_rent_m
@@ -811,7 +805,7 @@ def generate_pdf(salary_1_annual, salary_2_annual, total_monthly_living, total_e
     pdf.set_text_color(0, 0, 0)
     pdf.ln(5)
 
-    # --- 5. WEALTH MILESTONES & GROWTH CHART ---  
+    # --- 5. WEALTH MILESTONES & GROWTH CHART ---
     # Property Specifics
     pdf.row("Annual Rent:", f"${annual_gross_income:,.0f}", "Operating Expenses:", f"-${total_operating_expenses:,.0f}")
     pdf.row("Loan Interest:", f"-${annual_interest:,.0f}", "Pre-Tax Property CF:", f"${pre_tax_cashflow:,.2f}")
