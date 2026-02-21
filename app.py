@@ -13,10 +13,33 @@ st.set_page_config(page_title="Investment Analysis", layout="wide")
 st.title("🏙️ Property Investment Analyser")
 st.markdown("---")
 
+# --- LOCAL DATABASE CONFIG ---
+HISTORY_FILE = "property_history.csv"
+
+def save_to_history(name, url):
+    """Saves property search to local CSV when PDF is generated."""
+    if not url or url.strip() == "":
+        url = "No Link Provided"
+        
+    new_entry = pd.DataFrame({
+        "Date of PDF": [datetime.now().strftime("%Y-%m-%d %H:%M:%S")],
+        "Property Name": [name],
+        "Listing URL": [url]
+    })
+    
+    if os.path.exists(HISTORY_FILE):
+        history_df = pd.read_csv(HISTORY_FILE)
+        history_df = pd.concat([history_df, new_entry], ignore_index=True)
+    else:
+        history_df = new_entry
+        
+    # Deduplicate: Keep only the most recent entry for each URL
+    history_df = history_df.drop_duplicates(subset=["Listing URL"], keep="last")
+    history_df.to_csv(HISTORY_FILE, index=False)
+
 # --- 1. GLOBAL INPUTS (SIDEBAR) ---
 st.sidebar.header("📍 Core Parameters")
 property_name = st.sidebar.text_input("Property Name/Address", value="2 Example Street MELBOURNE")
-# NEW: Property URL Input
 property_url = st.sidebar.text_input("Property Listing URL", value="https://www.realestate.com.au/")
 purchase_price = st.sidebar.number_input("Purchase Price ($)", value=650000, step=10000)
 
@@ -30,7 +53,7 @@ growth_rate = st.sidebar.slider("Expected Annual Growth (%)", 0.0, 12.0, 4.0, st
 holding_period = st.sidebar.slider("Holding Period (Years)", 1, 30, 10)
 
 # --- 2. CREATE TABS ---
-tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
+tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9 = st.tabs([
     "Property & Acquisition", 
     "Income & Expenses", 
     "Loan Details",
@@ -38,15 +61,15 @@ tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
     "Depreciation", 
     "Tax & Gearing", 
     "10-Year Projections",
-    "CGT Projection"
+    "CGT Projection",
+    "Search History" # <--- NEW TAB
 ])
 
 # --- TAB 1: ACQUISITION ---
 with tab1:
     st.subheader("Initial Outlay")
     
-    # Optional: Display the link in the app UI as well
-    if property_url:
+    if property_url and property_url != "https://www.realestate.com.au/":
         st.markdown(f"🔗 **[View Real Estate Listing]({property_url})**")
         
     col1, col2 = st.columns(2)
@@ -247,6 +270,33 @@ with tab8:
     c_col2.metric("Estimated CGT Payable", f"${cgt_payable:,.2f}")
     c_col2.metric("Net Profit After Tax", f"${net_profit_on_sale:,.2f}")
 
+# --- TAB 9: SEARCH HISTORY LOG ---
+with tab9:
+    st.subheader("📚 Property Search History")
+    st.caption("A log of all properties you have exported to PDF. (Automatically saves upon PDF download)")
+    
+    if os.path.exists(HISTORY_FILE):
+        history_df = pd.read_csv(HISTORY_FILE)
+        # Sort so the newest properties are at the top
+        history_df = history_df.sort_values(by="Date of PDF", ascending=False).reset_index(drop=True)
+        
+        # Display the dataframe with clickable links
+        st.dataframe(
+            history_df,
+            column_config={
+                "Listing URL": st.column_config.LinkColumn("Listing URL")
+            },
+            hide_index=True,
+            use_container_width=True
+        )
+        
+        # Add a clear button for housekeeping
+        if st.button("🗑️ Clear History"):
+            os.remove(HISTORY_FILE)
+            st.rerun()
+    else:
+        st.info("No properties analyzed yet. Go ahead and download your first PDF report to save it here!")
+
 # --- PDF GENERATION LOGIC ---
 st.markdown("---")
 st.subheader("📄 Export Analysis Report")
@@ -289,16 +339,13 @@ def generate_pdf():
     
     current_date = datetime.now().strftime("%d %B %Y")
     
-    # 0. Header with Property Info & Link
     pdf.set_font("helvetica", "B", 12)
     pdf.set_text_color(0, 0, 0)
     pdf.cell(0, 6, f"Property: {property_name}", ln=True)
     
-    # Add clickable link if provided
     if property_url and property_url.strip() != "":
         pdf.set_font("helvetica", "U", 10)
-        pdf.set_text_color(0, 102, 204) # Blue hyperlink color
-        # This creates the clickable hyperlink in the PDF
+        pdf.set_text_color(0, 102, 204) 
         pdf.cell(0, 6, "Click here to view the online property listing", ln=True, link=property_url)
     
     pdf.set_font("helvetica", "I", 10)
@@ -307,14 +354,12 @@ def generate_pdf():
     pdf.ln(5)
     pdf.set_text_color(0, 0, 0) 
     
-    # 1. Acquisition
     pdf.section_header("1. Acquisition & Capital Required")
     pdf.row("Purchase Price:", f"${purchase_price:,.0f}")
     pdf.row("Total Entry Costs:", f"${total_acquisition_costs:,.0f}")
     pdf.row("Total Funds Required:", f"${total_cost_base:,.0f}")
     pdf.ln(5)
     
-    # 2. Cash Flow
     pdf.section_header("2. Annual Cash Flow & Household Tax Impact")
     pdf.row("Gross Annual Income:", f"${annual_gross_income:,.0f}")
     pdf.row("Total Operating Expenses:", f"${total_operating_expenses:,.0f}")
@@ -325,20 +370,17 @@ def generate_pdf():
     pdf.row("Net Post-Tax Cash Flow:", f"${post_tax_cashflow:,.0f}")
     pdf.ln(5)
     
-    # 3. Projections
     pdf.section_header("3. 10-Year Wealth Forecast")
     pdf.row("Estimated Property Value (Year 10):", f"${future_values[-1]:,.0f}")
     pdf.row("Estimated Equity (Year 10):", f"${equity[-1]:,.0f}")
     pdf.ln(5)
 
-    # 4. CGT & Sale Profit
     pdf.section_header("4. Sale & Capital Gains Tax (Year 10)")
     pdf.row("Estimated Capital Gain:", f"${capital_gain:,.0f}")
     pdf.row("Estimated CGT Payable:", f"${cgt_payable:,.0f}")
     pdf.row("Net Profit (After Tax):", f"${net_profit_on_sale:,.0f}")
     pdf.ln(5)
 
-    # Chart Generation
     fig, ax = plt.subplots(figsize=(8, 4))
     ax.plot(df_chart.index, df_chart["Property Value"], label="Property Value", color="#1f77b4", linewidth=2)
     ax.plot(df_chart.index, df_chart["Equity"], label="Equity", color="#2ca02c", linewidth=2)
@@ -361,11 +403,13 @@ def generate_pdf():
 
     return bytes(pdf.output())
 
-# --- DOWNLOAD BUTTON ---
+# --- DOWNLOAD BUTTON & APPEND TO DB ---
 pdf_bytes = generate_pdf()
 st.download_button(
     label="⬇️ Download Professional PDF Report",
     data=pdf_bytes,
     file_name=f"{property_name.replace(' ', '_')}_Report.pdf",
-    mime="application/pdf"
+    mime="application/pdf",
+    on_click=save_to_history, # Executes our save logic right as they download!
+    args=(property_name, property_url)
 )
