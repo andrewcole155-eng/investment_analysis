@@ -6,20 +6,26 @@ from fpdf import FPDF
 import matplotlib.pyplot as plt
 import io
 import os
-from datetime import datetime  # <--- NEW: Added to handle the print date
+from datetime import datetime
 
 # --- PAGE SETUP ---
 st.set_page_config(page_title="Investment Analysis", layout="wide")
-st.title("🏙️ Property Investment Analyzer")
+st.title("🏙️ Property Investment Analyser")
 st.markdown("---")
 
 # --- 1. GLOBAL INPUTS (SIDEBAR) ---
 st.sidebar.header("📍 Core Parameters")
-# NEW: Property Name Input
 property_name = st.sidebar.text_input("Property Name/Address", value="2 Example Street MELBOURNE")
-purchase_price = st.sidebar.number_input("Purchase Price ($)", value=850000, step=10000)
-salary = st.sidebar.number_input("Your Annual Salary ($)", value=120000, step=5000)
-growth_rate = st.sidebar.slider("Expected Annual Growth (%)", 0.0, 12.0, 5.0, step=0.5) / 100
+purchase_price = st.sidebar.number_input("Purchase Price ($)", value=650000, step=10000)
+
+st.sidebar.subheader("Tax Profiles (Joint Ownership)")
+# Splitting the incomes ensures the marginal tax rates are calculated correctly per person
+salary_1 = st.sidebar.number_input("Investor 1 Salary ($)", value=150000, step=5000)
+salary_2 = st.sidebar.number_input("Investor 2 Salary ($)", value=150000, step=5000)
+ownership_split = st.sidebar.slider("Ownership Split (Inv 1 %)", 0, 100, 50) / 100
+
+st.sidebar.subheader("Projections")
+growth_rate = st.sidebar.slider("Expected Annual Growth (%)", 0.0, 12.0, 4.0, step=0.5) / 100
 holding_period = st.sidebar.slider("Holding Period (Years)", 1, 30, 10)
 
 # --- 2. CREATE TABS ---
@@ -37,46 +43,52 @@ tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
 with tab1:
     st.subheader("Initial Outlay")
     col1, col2 = st.columns(2)
-    stamp_duty = col1.number_input("Stamp Duty ($)", value=46000, step=1000)
-    legal_fees = col2.number_input("Legal & Conveyancing ($)", value=1800, step=100)
+    stamp_duty = col1.number_input("Stamp Duty ($)", value=34100, step=1000)
+    legal_fees = col2.number_input("Legal & Conveyancing ($)", value=1500, step=100)
     building_pest = col1.number_input("Building & Pest ($)", value=600, step=50)
+    loan_setup = col2.number_input("Loan Setup Fees ($)", value=500, step=50)
+    buyers_agent = col1.number_input("Buyers Agent ($)", value=5000, step=500)
     other_entry = col2.number_input("Other Entry Costs ($)", value=1000, step=100)
     
-    total_acquisition_costs = stamp_duty + legal_fees + building_pest + other_entry
+    total_acquisition_costs = stamp_duty + legal_fees + building_pest + loan_setup + buyers_agent + other_entry
     total_cost_base = purchase_price + total_acquisition_costs
     
     st.metric("Total Acquisition Costs", f"${total_acquisition_costs:,.0f}")
     st.metric("Total Required (Property + Costs)", f"${total_cost_base:,.0f}")
 
-# --- TAB 2: INCOME & EXPENSES ---
+# --- TAB 2: INCOME & EXPENSES (Monthly Inputs) ---
 with tab2:
-    st.subheader("Cash Flow Essentials")
+    st.subheader("Cash Flow Essentials (Monthly Sourced)")
     c1, c2 = st.columns(2)
     
-    # Income
-    weekly_rent = c1.number_input("Weekly Rent ($)", value=750, step=10)
-    vacancy_weeks = c1.number_input("Vacancy (Weeks/Year)", value=2, step=1)
-    annual_gross_income = weekly_rent * (52 - vacancy_weeks)
+    # Income (Monthly)
+    monthly_rent = c1.number_input("Monthly Rent Received ($)", value=3683.33, step=100.0)
+    vacancy_pct = c1.number_input("Vacancy Rate (%)", value=5.0, step=1.0)
     
-    # Expenses
-    rates = c2.number_input("Council & Water Rates ($)", value=3200, step=100)
-    insurance = c2.number_input("Landlord Insurance ($)", value=1500, step=100)
-    mgt_fee_pct = c2.number_input("Management Fee (%)", value=7.5, step=0.5) / 100
-    maintenance = c2.number_input("Maintenance Buffer ($)", value=1500, step=100)
+    annual_gross_income = (monthly_rent * 12) * (1 - (vacancy_pct / 100))
     
-    mgt_fee_cost = annual_gross_income * mgt_fee_pct
-    total_operating_expenses = rates + insurance + mgt_fee_cost + maintenance
+    # Expenses (Monthly)
+    mgt_fee_m = c2.number_input("Property Management (Monthly $)", value=276.25, step=10.0)
+    strata_m = c2.number_input("Strata/Body Corporate (Monthly $)", value=500.00, step=10.0)
+    insurance_m = c2.number_input("Landlord Insurance (Monthly $)", value=45.00, step=5.0)
+    rates_m = c2.number_input("Council Rates (Monthly $)", value=165.00, step=10.0)
+    maint_m = c2.number_input("Maintenance (Monthly $)", value=150.00, step=10.0)
+    water_m = c2.number_input("Water Service (Monthly $)", value=80.00, step=5.0)
+    other_m = c2.number_input("Other (Monthly $)", value=25.00, step=5.0)
+    
+    total_monthly_expenses = mgt_fee_m + strata_m + insurance_m + rates_m + maint_m + water_m + other_m
+    total_operating_expenses = total_monthly_expenses * 12
     
     st.divider()
     metric_col1, metric_col2 = st.columns(2)
-    metric_col1.metric("Gross Annual Income", f"${annual_gross_income:,.0f}")
-    metric_col2.metric("Total Annual Expenses", f"${total_operating_expenses:,.0f}")
+    metric_col1.metric("Gross Annual Income", f"${annual_gross_income:,.2f}")
+    metric_col2.metric("Total Annual Expenses", f"${total_operating_expenses:,.2f}")
 
 # --- TAB 3: LOAN DETAILS ---
 with tab3:
     st.subheader("Financing Structure")
     lvr_pct = st.slider("LVR (%)", 0, 100, 80) / 100
-    interest_rate = st.number_input("Interest Rate (%)", value=6.15, step=0.1) / 100
+    interest_rate = st.number_input("Interest Rate (%)", value=5.49, step=0.01) / 100
     loan_term = st.number_input("Loan Term (Years)", value=30, step=1)
     loan_type = st.selectbox("Repayment Type", ["Interest Only", "Principal & Interest"])
     
@@ -99,14 +111,14 @@ with tab3:
 # --- TAB 4: DEPRECIATION ---
 with tab4:
     st.subheader("Tax Depreciation (Non-Cash Deductions)")
-    div_43 = st.number_input("Capital Works (Div 43) ($)", value=6000, step=500)
-    div_40 = st.number_input("Plant & Equipment (Div 40) ($)", value=2500, step=500)
+    div_43 = st.number_input("Capital Works (Div 43) ($)", value=9000, step=500)
+    div_40 = st.number_input("Plant & Equipment (Div 40) ($)", value=8500, step=500)
     total_depreciation = div_43 + div_40
     st.metric("Total Annual Depreciation", f"${total_depreciation:,.0f}")
 
-# --- TAB 5: TAX & NEGATIVE GEARING ---
+# --- TAB 5: TAX & NEGATIVE GEARING (Dual Salary Logic) ---
 with tab5:
-    st.subheader("Tax Impact & Cash Flow")
+    st.subheader("Household Tax Impact & Cash Flow")
     
     def calculate_tax(income):
         if income <= 18200: return 0
@@ -115,30 +127,42 @@ with tab5:
         elif income <= 190000: return 31288 + (income - 135000) * 0.37
         else: return 51638 + (income - 190000) * 0.45
 
+    # Total Property Income/Loss
     total_tax_deductions = total_operating_expenses + annual_interest + total_depreciation
-    taxable_property_income = annual_gross_income - total_tax_deductions
+    net_property_taxable_income = annual_gross_income - total_tax_deductions
     
-    base_tax = calculate_tax(salary)
-    new_taxable_income = max(0, salary + taxable_property_income)
-    new_tax = calculate_tax(new_taxable_income)
-    tax_variance = base_tax - new_tax
+    # Split the loss/gain based on ownership
+    property_income_1 = net_property_taxable_income * ownership_split
+    property_income_2 = net_property_taxable_income * (1 - ownership_split)
+    
+    # Calculate Tax Variance for Investor 1
+    base_tax_1 = calculate_tax(salary_1)
+    new_tax_1 = calculate_tax(max(0, salary_1 + property_income_1))
+    tax_variance_1 = base_tax_1 - new_tax_1
+    
+    # Calculate Tax Variance for Investor 2
+    base_tax_2 = calculate_tax(salary_2)
+    new_tax_2 = calculate_tax(max(0, salary_2 + property_income_2))
+    tax_variance_2 = base_tax_2 - new_tax_2
+    
+    total_tax_variance = tax_variance_1 + tax_variance_2
     
     pre_tax_cashflow = annual_gross_income - (total_operating_expenses + annual_repayment)
-    post_tax_cashflow = pre_tax_cashflow + tax_variance
+    post_tax_cashflow = pre_tax_cashflow + total_tax_variance
 
     t_col1, t_col2 = st.columns(2)
-    t_col1.metric("Pre-Tax Cash Flow (Annual)", f"${pre_tax_cashflow:,.0f}")
+    t_col1.metric("Pre-Tax Cash Flow (Annual)", f"${pre_tax_cashflow:,.2f}")
     
-    if tax_variance > 0:
-        t_col2.metric("Estimated Tax Refund", f"${tax_variance:,.0f}")
+    if total_tax_variance > 0:
+        t_col2.metric("Combined Estimated Tax Refund", f"${total_tax_variance:,.2f}")
     else:
-        t_col2.metric("Estimated Tax Payable", f"${abs(tax_variance):,.0f}")
+        t_col2.metric("Combined Estimated Tax Payable", f"${abs(total_tax_variance):,.2f}")
         
-    st.metric("Net Post-Tax Cash Flow (Annual)", f"${post_tax_cashflow:,.0f}")
+    st.metric("Household Net Post-Tax Cash Flow (Annual)", f"${post_tax_cashflow:,.2f}")
     if post_tax_cashflow < 0:
-        st.write(f"⚠️ This property costs you **${abs(post_tax_cashflow)/52:,.0f} per week** out of pocket to hold.")
+        st.write(f"⚠️ This property costs your household **${abs(post_tax_cashflow)/52:,.2f} per week** out of pocket to hold.")
     else:
-        st.write(f"✅ This property puts **${post_tax_cashflow/52:,.0f} per week** in your pocket.")
+        st.write(f"✅ This property puts **${post_tax_cashflow/52:,.2f} per week** in your household's pocket.")
 
 # --- TAB 6: 10-YEAR PROJECTIONS ---
 with tab6:
@@ -220,7 +244,6 @@ def generate_pdf():
     pdf = InvestmentReportPDF()
     pdf.add_page()
     
-    # --- NEW: Property Info & Date Header ---
     current_date = datetime.now().strftime("%d %B %Y")
     
     pdf.set_font("helvetica", "B", 12)
@@ -228,10 +251,10 @@ def generate_pdf():
     pdf.cell(0, 8, f"Property: {property_name}", ln=True)
     
     pdf.set_font("helvetica", "I", 10)
-    pdf.set_text_color(100, 100, 100) # Nice subtle grey for the date
+    pdf.set_text_color(100, 100, 100)
     pdf.cell(0, 8, f"Report Generated: {current_date}", ln=True)
     pdf.ln(5)
-    pdf.set_text_color(0, 0, 0) # Reset color
+    pdf.set_text_color(0, 0, 0) 
     
     # 1. Acquisition
     pdf.section_header("1. Acquisition & Capital Required")
@@ -241,10 +264,11 @@ def generate_pdf():
     pdf.ln(5)
     
     # 2. Cash Flow
-    pdf.section_header("2. Annual Cash Flow & Tax Impact")
+    pdf.section_header("2. Annual Cash Flow & Household Tax Impact")
     pdf.row("Gross Annual Income:", f"${annual_gross_income:,.0f}")
     pdf.row("Total Operating Expenses:", f"${total_operating_expenses:,.0f}")
     pdf.row("Annual Debt Servicing:", f"${annual_repayment:,.0f}")
+    pdf.row("Combined Tax Refund/Payable:", f"${total_tax_variance:,.0f}")
     pdf.row("Net Post-Tax Cash Flow:", f"${post_tax_cashflow:,.0f}")
     pdf.ln(5)
     
@@ -277,7 +301,7 @@ def generate_pdf():
     plt.savefig(img_buffer, format="png", bbox_inches="tight", dpi=150)
     img_buffer.seek(0)
     
-    if pdf.get_y() > 200:
+    if pdf.get_y() > 190:
         pdf.add_page()
         
     pdf.image(img_buffer, x=15, w=180)
@@ -286,7 +310,6 @@ def generate_pdf():
 
 # --- DOWNLOAD BUTTON ---
 pdf_bytes = generate_pdf()
-# Dynamically name the downloaded file based on the property name
 st.download_button(
     label="⬇️ Download Professional PDF Report",
     data=pdf_bytes,
