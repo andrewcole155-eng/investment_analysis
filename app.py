@@ -155,8 +155,22 @@ cars = col_spec3.number_input("Cars", value=st.session_state.form_data["cars"], 
 purchase_price = st.sidebar.number_input("Purchase Price ($)", value=st.session_state.form_data["price"], step=10000)
 
 st.sidebar.subheader("Tax Profiles")
-salary_1 = st.sidebar.number_input("Investor 1 Salary ($)", value=st.session_state.form_data["sal1"], step=5000)
-salary_2 = st.sidebar.number_input("Investor 2 Salary ($)", value=st.session_state.form_data["sal2"], step=5000)
+
+# Investor 1
+col_s1_val, col_s1_freq = st.sidebar.columns([2, 1])
+s1_input = col_s1_val.number_input("Inv 1 Salary ($)", value=12500.0, step=500.0)
+s1_freq = col_s1_freq.selectbox("Freq", ["Monthly", "Fortnightly", "Annually"], key="s1_f")
+
+# Investor 2
+col_s2_val, col_s2_freq = st.sidebar.columns([2, 1])
+s2_input = col_s2_val.number_input("Inv 2 Salary ($)", value=5769.0, step=200.0)
+s2_freq = col_s2_freq.selectbox("Freq", ["Fortnightly", "Monthly", "Annually"], key="s2_f")
+
+# Standardize to Annual for the math engine
+freq_map = {"Monthly": 12, "Fortnightly": 26, "Annually": 1}
+salary_1 = s1_input * freq_map[s1_freq]
+salary_2 = s2_input * freq_map[s2_freq]
+
 ownership_split_val = st.sidebar.slider("Ownership Split (Inv 1 %)", 0, 100, st.session_state.form_data["split"])
 ownership_split = ownership_split_val / 100
 
@@ -508,12 +522,17 @@ with tab10:
     
     # --- NEW: SERVICING OVERVIEW ---
     st.subheader("⚖️ Monthly Serviceability Overview")
-    st.markdown("A high-level view of household cash flow combining standard salaries, proposed rental income, and all debt obligations.")
     
-    # 1. Calculate Net Monthly Income
-    net_salary_1 = salary_1 - calculate_tax(salary_1)
-    net_salary_2 = salary_2 - calculate_tax(salary_2)
-    total_net_income_m = (net_salary_1 + net_salary_2) / 12
+    # Calculate Net Annuals
+    net_ann_1 = salary_1 - calculate_tax(salary_1)
+    net_ann_2 = salary_2 - calculate_tax(salary_2)
+    
+    # Calculate Net Monthlys for the dashboard
+    total_net_income_m = (net_ann_1 + net_ann_2) / 12
+    
+    # Individual Take-home (displayed for user clarity)
+    inv1_take_home = net_ann_1 / freq_map[s1_freq]
+    inv2_take_home = net_ann_2 / freq_map[s2_freq]
     
     # 2. Bank Rental Shading (Banks usually only accept 80% of rental income to buffer for vacancies)
     shaded_rent_m = monthly_rent * 0.80
@@ -530,10 +549,11 @@ with tab10:
     srv1, srv2 = st.columns([1, 1])
     
     with srv1:
-        st.write("**INFLOWS**")
-        st.write(f"Net Household Salary: **${total_net_income_m:,.2f}**")
-        st.write(f"Proposed Rent (80% Bank Shade): **${shaded_rent_m:,.2f}**")
-        st.markdown(f"### Total Usable Income: <span style='color:#00cc96'>${total_income_m:,.2f}</span>", unsafe_allow_html=True)
+        st.write("**INFLOWS (Net Take-Home)**")
+        st.write(f"Inv 1 ({s1_freq}): **${inv1_take_home:,.2f}**")
+        st.write(f"Inv 2 ({s2_freq}): **${inv2_take_home:,.2f}**")
+        st.write(f"Proposed Rent (80% Shade): **${shaded_rent_m:,.2f}**")
+        st.markdown(f"### Total Monthly Inflow: <span style='color:#00cc96'>${total_income_m:,.2f}</span>", unsafe_allow_html=True)
         
     with srv2:
         st.write("**OUTFLOWS**")
@@ -737,14 +757,15 @@ st.download_button(
     args=(property_name, property_url, {
         "purchase_price": purchase_price,
         "beds": beds, "baths": baths, "cars": cars,
-        "salary_1": salary_1, "salary_2": salary_2,
+        "salary_1": salary_1,         # This is now the calculated annual figure
+        "salary_2": salary_2,         # This is now the calculated annual figure
         "ownership_split": ownership_split,
         "growth_rate": growth_rate,
         "holding_period": holding_period,
         "living_expenses_json": st.session_state.form_data["living_expenses_json"],
-        "ext_mortgage": ext_mortgage, # NEW
-        "ext_car_loan": ext_car_loan, # NEW
-        "ext_cc": ext_cc,             # NEW
-        "ext_other": ext_other        # NEW
+        "ext_mortgage": ext_mortgage,
+        "ext_car_loan": ext_car_loan,
+        "ext_cc": ext_cc,
+        "ext_other": ext_other
     })
 )
