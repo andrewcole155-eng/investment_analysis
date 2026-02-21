@@ -884,9 +884,21 @@ def generate_pdf(salary_1_annual, salary_2_annual, total_monthly_living, total_e
 
     return bytes(pdf.output())
 
-# --- STANDALONE SAVE BUTTON & DOWNLOAD BUTTON ---
+# ==========================================================
+# --- EXPORT & SAVE SECTION (BOTTOM OF SCRIPT) ---
+# ==========================================================
 st.markdown("---")
+st.subheader("📄 Export Analysis Report")
 
+# 1. Generate PDF BEFORE creating UI columns to prevent layout artifacts
+pdf_bytes = generate_pdf(
+    salary_1_annual, 
+    salary_2_annual, 
+    total_monthly_living, 
+    total_existing_debt_m
+)
+
+# 2. Create perfectly aligned columns
 col_save, col_dl = st.columns(2)
 
 with col_save:
@@ -894,7 +906,7 @@ with col_save:
         save_to_history(property_name, property_url, {
             "purchase_price": purchase_price,
             "beds": beds, "baths": baths, "cars": cars,
-            "s1_input": s1_input, # Save raw input to prevent double math
+            "s1_input": s1_input, # Save raw input
             "s1_freq": s1_freq,   # Save raw freq
             "s2_input": s2_input, 
             "s2_freq": s2_freq,
@@ -907,28 +919,24 @@ with col_save:
             "ext_cc": ext_cc,
             "ext_other": ext_other
         })
-        st.success("✅ Saved to History!")
+        # Use a toast notification so it doesn't break button alignment
+        st.toast("✅ Property successfully saved to history!")
+        # CRITICAL FIX: Force the app to immediately redraw Tab 9 with the new data
+        st.rerun()
 
 with col_dl:
-    pdf_bytes = generate_pdf(
-        salary_1_annual, 
-        salary_2_annual, 
-        total_monthly_living, 
-        total_existing_debt_m
-    )
-
     st.download_button(
         label="⬇️ Download Full Summary PDF",
         data=pdf_bytes,
         file_name=f"{property_name.replace(' ', '_')}_Summary.pdf",
         mime="application/pdf",
         on_click=save_to_history,
-        use_container_width=True,
+        use_container_width=True, # Ensure buttons match in width
         args=(property_name, property_url, {
             "purchase_price": purchase_price,
             "beds": beds, "baths": baths, "cars": cars,
-            "s1_input": s1_input, # Save raw input
-            "s1_freq": s1_freq,   # Save raw freq
+            "s1_input": s1_input, 
+            "s1_freq": s1_freq,   
             "s2_input": s2_input,
             "s2_freq": s2_freq,
             "ownership_split": ownership_split,
