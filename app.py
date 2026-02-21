@@ -80,10 +80,10 @@ if "form_data" not in st.session_state:
         "sal1": 150000, "sal2": 150000, "split": 50,
         "growth": 4.0, "hold": 10,
         "living_expenses_json": json.dumps(DEFAULT_LIVING_EXPENSES_DATA),
-        "ext_mortgage": 0,    # NEW: Existing Mortgage Repayment
-        "ext_car_loan": 0,    # NEW: Car Loans
-        "ext_cc": 0,          # NEW: Credit Cards
-        "ext_other": 0        # NEW: Other Loans
+        "ext_mortgage": 0.0,    # FIX: Changed 0 to 0.0
+        "ext_car_loan": 0.0,    # FIX: Changed 0 to 0.0
+        "ext_cc": 0.0,          # FIX: Changed 0 to 0.0
+        "ext_other": 0.0        # FIX: Changed 0 to 0.0
     }
 
 def load_property(row):
@@ -495,10 +495,12 @@ with tab10:
     # --- NEW: EXISTING DEBT COMMITMENTS ---
     st.subheader("💳 Existing Debt Commitments (Monthly)")
     d1, d2, d3, d4 = st.columns(4)
-    ext_mortgage = d1.number_input("Existing Mortgage(s) ($)", value=st.session_state.form_data["ext_mortgage"], step=100.0)
-    ext_car_loan = d2.number_input("Car Loan(s) ($)", value=st.session_state.form_data["ext_car_loan"], step=50.0)
-    ext_cc = d3.number_input("Credit Card Payments ($)", value=st.session_state.form_data["ext_cc"], step=50.0, help="Typically assessed at 3-4% of total limit")
-    ext_other = d4.number_input("Other Loans ($)", value=st.session_state.form_data["ext_other"], step=50.0)
+    
+    # FIX: Wrapped values in float() to prevent MixedNumericTypesError
+    ext_mortgage = d1.number_input("Existing Mortgage(s) ($)", value=float(st.session_state.form_data["ext_mortgage"]), step=100.0)
+    ext_car_loan = d2.number_input("Car Loan(s) ($)", value=float(st.session_state.form_data["ext_car_loan"]), step=50.0)
+    ext_cc = d3.number_input("Credit Card Payments ($)", value=float(st.session_state.form_data["ext_cc"]), step=50.0, help="Typically assessed at 3-4% of total limit")
+    ext_other = d4.number_input("Other Loans ($)", value=float(st.session_state.form_data["ext_other"]), step=50.0)
     
     total_existing_debt_m = ext_mortgage + ext_car_loan + ext_cc + ext_other
     
