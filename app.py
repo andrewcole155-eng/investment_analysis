@@ -349,66 +349,83 @@ def generate_pdf():
             self.cell(0, 10, f"  {title}", ln=True, fill=True)
             self.ln(3)
 
-        def row(self, label, value):
+        def row(self, label, value, label2="", value2=""):
             self.set_font("helvetica", "", 12)
-            self.cell(90, 8, label, border=0)
+            self.cell(50, 8, label, border=0)
             self.set_font("helvetica", "B", 12)
-            self.set_text_color(0, 0, 0)
-            self.cell(0, 8, value, ln=True, border=0)
+            self.cell(45, 8, value, border=0)
+            if label2:
+                self.set_font("helvetica", "", 12)
+                self.cell(50, 8, label2, border=0)
+                self.set_font("helvetica", "B", 12)
+                self.cell(0, 8, value2, ln=True, border=0)
+            else:
+                self.ln(8)
 
     pdf = InvestmentReportPDF()
     pdf.add_page()
     current_date = datetime.now().strftime("%d %B %Y")
     
-    pdf.set_font("helvetica", "B", 12)
-    pdf.cell(0, 6, f"Property: {property_name}", ln=True)
-    pdf.set_font("helvetica", "", 10)
-    pdf.cell(0, 6, f"Configuration: {beds} Bed | {baths} Bath | {cars} Car", ln=True)
+    # Header Info
+    pdf.set_font("helvetica", "B", 16)
+    pdf.cell(0, 8, property_name, ln=True)
+    pdf.set_font("helvetica", "", 12)
+    pdf.cell(0, 8, f"{beds} Bed | {baths} Bath | {cars} Car", ln=True)
     
-    if property_url and property_url.strip() != "":
+    if property_url and property_url.strip() != "" and property_url != "https://www.realestate.com.au/":
         pdf.set_font("helvetica", "U", 10)
         pdf.set_text_color(0, 102, 204) 
-        pdf.cell(0, 6, "Click here to view listing", ln=True, link=property_url)
+        pdf.cell(0, 6, "View Listing Online", ln=True, link=property_url)
+        pdf.set_text_color(0, 0, 0)
     
     pdf.set_font("helvetica", "I", 10)
     pdf.set_text_color(100, 100, 100)
-    pdf.cell(0, 6, f"Report Generated: {current_date}", ln=True)
+    pdf.cell(0, 6, f"Report Date: {current_date}", ln=True)
     pdf.ln(5)
-    pdf.set_text_color(0, 0, 0) 
-    
-    pdf.section_header("1. Acquisition & Capital Required")
-    pdf.row("Purchase Price:", f"${purchase_price:,.0f}")
-    pdf.row("Total Entry Costs:", f"${total_acquisition_costs:,.0f}")
-    pdf.row("Total Funds Required:", f"${total_cost_base:,.0f}")
-    pdf.ln(5)
-    
-    pdf.section_header("2. Annual Cash Flow & Tax")
-    pdf.row("Gross Annual Income:", f"${annual_gross_income:,.0f}")
-    pdf.row("Annual Pre-Tax Cash Flow:", f"${pre_tax_cashflow:,.0f}")
-    pdf.row("Annual Post-Tax Cash Flow:", f"${post_tax_cashflow:,.0f}")
-    pdf.ln(5)
-    
-    pdf.section_header("3. 10-Year Projections")
-    pdf.row("Estimated Property Value:", f"${future_values[-1]:,.0f}")
-    pdf.row("Estimated Net Profit on Sale:", f"${net_profit_on_sale:,.0f}")
+    pdf.set_text_color(0, 0, 0)
 
-    # Add Chart to PDF
+    # 1. Executive Summary
+    pdf.section_header("Executive Summary")
+    pdf.row("Purchase Price:", f"${purchase_price:,.0f}", "Gross Yield:", f"{(annual_gross_income/purchase_price)*100:.2f}%")
+    pdf.row("Total Outlay:", f"${(total_cost_base - loan_amount):,.0f}", "Loan Amount:", f"${loan_amount:,.0f}")
+    pdf.row("Loan Type:", f"{loan_type}", "Interest Rate:", f"{interest_rate*100:.2f}%")
+    pdf.ln(5)
+
+    # 2. Cash Flow Snapshot (Weekly & Annual)
+    pdf.section_header("Cash Flow Analysis")
+    pdf.row("Gross Annual Rent:", f"${annual_gross_income:,.0f}", "Annual Expenses:", f"${total_operating_expenses:,.0f}")
+    pdf.row("Pre-Tax Cash Flow:", f"${pre_tax_cashflow:,.0f}", "Pre-Tax Weekly:", f"${pre_tax_cashflow/52:,.2f}")
+    pdf.row("Est. Tax Impact:", f"${total_tax_variance:,.0f}", "Post-Tax Weekly:", f"${post_tax_cashflow/52:,.2f}")
+    pdf.set_font("helvetica", "B", 12)
+    pdf.cell(0, 10, f"Net Post-Tax Annual Position: ${post_tax_cashflow:,.2f}", ln=True)
+    pdf.ln(5)
+
+    # 3. 10-Year Forecast
+    pdf.section_header(f"{holding_period}-Year Wealth Projection")
+    pdf.row("Est. Value (Yr {0}):".format(holding_period), f"${future_values[-1]:,.0f}", "Total Equity:", f"${equity[-1]:,.0f}")
+    pdf.row("Gross Capital Gain:", f"${capital_gain:,.0f}", "Net Profit (After CGT):", f"${net_profit_on_sale:,.0f}")
+    pdf.ln(5)
+
+    # Add the Chart
     fig, ax = plt.subplots(figsize=(8, 4))
     ax.plot(df_chart.index, df_chart["Property Value"], label="Property Value", color="#1f77b4", linewidth=2)
     ax.plot(df_chart.index, df_chart["Equity"], label="Equity", color="#2ca02c", linewidth=2)
+    ax.set_title("Growth & Equity Forecast")
+    ax.grid(True, linestyle="--", alpha=0.6)
     ax.legend()
+    
     img_buffer = io.BytesIO()
     plt.savefig(img_buffer, format="png", bbox_inches="tight", dpi=150)
     pdf.image(img_buffer, x=15, w=180)
 
     return bytes(pdf.output())
 
-# --- DOWNLOAD BUTTON & APPEND TO DB ---
+# --- DOWNLOAD BUTTON ---
 pdf_bytes = generate_pdf()
 st.download_button(
-    label="⬇️ Download Professional PDF Report",
+    label="⬇️ Download Full Summary PDF",
     data=pdf_bytes,
-    file_name=f"{property_name.replace(' ', '_')}_Report.pdf",
+    file_name=f"{property_name.replace(' ', '_')}_Summary.pdf",
     mime="application/pdf",
     on_click=save_to_history,
     args=(property_name, property_url)
