@@ -77,10 +77,12 @@ if "form_data" not in st.session_state:
         "prop_url": "https://www.realestate.com.au/",
         "price": 650000,
         "beds": 2, "baths": 1, "cars": 1,
-        "sal1": 150000, "sal2": 150000, "split": 50,
+        "sal1": 3850.0,            # Investor 1 Default
+        "sal2": 8500.0,            # Investor 2 Default
+        "split": 50,
         "growth": 4.0, "hold": 10,
         "living_expenses_json": json.dumps(DEFAULT_LIVING_EXPENSES_DATA),
-        "ext_mortgage": 2921.0,    # Updated default
+        "ext_mortgage": 2921.0,    # Set as requested
         "ext_car_loan": 0.0,
         "ext_cc": 0.0,
         "ext_other": 0.0
@@ -154,22 +156,26 @@ cars = col_spec3.number_input("Cars", value=st.session_state.form_data["cars"], 
 
 purchase_price = st.sidebar.number_input("Purchase Price ($)", value=st.session_state.form_data["price"], step=10000)
 
-st.sidebar.subheader("Tax Profiles")
+st.sidebar.subheader("Tax Profiles (Post-Tax)")
 
-# Investor 1
+# Investor 1 - Default 3850 Fortnightly
 col_s1_val, col_s1_freq = st.sidebar.columns([2, 1])
-s1_input = col_s1_val.number_input("Inv 1 Salary ($)", value=12500.0, step=500.0)
-s1_freq = col_s1_freq.selectbox("Freq", ["Monthly", "Fortnightly", "Annually"], key="s1_f")
+s1_input = col_s1_val.number_input("Inv 1 Take-Home ($)", value=st.session_state.form_data["sal1"], step=100.0)
+s1_freq = col_s1_freq.selectbox("Freq", ["Fortnightly", "Monthly", "Annually"], key="s1_f")
 
-# Investor 2
+# Investor 2 - Default 8500 Monthly
 col_s2_val, col_s2_freq = st.sidebar.columns([2, 1])
-s2_input = col_s2_val.number_input("Inv 2 Salary ($)", value=5769.0, step=200.0)
-s2_freq = col_s2_freq.selectbox("Freq", ["Fortnightly", "Monthly", "Annually"], key="s2_f")
+s2_input = col_s2_val.number_input("Inv 2 Take-Home ($)", value=st.session_state.form_data["sal2"], step=100.0)
+s2_freq = col_s2_freq.selectbox("Freq", ["Monthly", "Fortnightly", "Annually"], key="s2_f")
 
-# Standardize to Annual for the math engine
+# Mapping for annualization
 freq_map = {"Monthly": 12, "Fortnightly": 26, "Annually": 1}
-salary_1 = s1_input * freq_map[s1_freq]
-salary_2 = s2_input * freq_map[s2_freq]
+annual_net_1 = s1_input * freq_map[s1_freq]
+annual_net_2 = s2_input * freq_map[s2_freq]
+
+# These variables are now used by the math engine
+salary_1 = annual_net_1
+salary_2 = annual_net_2
 
 ownership_split_val = st.sidebar.slider("Ownership Split (Inv 1 %)", 0, 100, st.session_state.form_data["split"])
 ownership_split = ownership_split_val / 100
@@ -331,6 +337,7 @@ with tab5:
 # --- TAB 6: TAX & NEGATIVE GEARING ---
 with tab6:
     st.subheader("Household Tax Impact & Cash Flow")
+    st.info("💡 **Note:** Negative Gearing benefits are estimated based on your Take-Home pay figures. To calculate these, the app treats your inputs as the base taxable income.")
     
     def calculate_tax(income):
         if income <= 18200: return 0
@@ -520,39 +527,29 @@ with tab10:
     
     st.divider()
     
-    # --- NEW: SERVICING OVERVIEW ---
+# --- NEW: SERVICING OVERVIEW ---
     st.subheader("⚖️ Monthly Serviceability Overview")
     
-    # Calculate Net Annuals
-    net_ann_1 = salary_1 - calculate_tax(salary_1)
-    net_ann_2 = salary_2 - calculate_tax(salary_2)
+    # Inflows: Net inputs combined and divided into months
+    total_net_income_m = (annual_net_1 + annual_net_2) / 12
     
-    # Calculate Net Monthlys for the dashboard
-    total_net_income_m = (net_ann_1 + net_ann_2) / 12
-    
-    # Individual Take-home (displayed for user clarity)
-    inv1_take_home = net_ann_1 / freq_map[s1_freq]
-    inv2_take_home = net_ann_2 / freq_map[s2_freq]
-    
-    # 2. Bank Rental Shading (Banks usually only accept 80% of rental income to buffer for vacancies)
+    # 2. Bank Rental Shading (80%)
     shaded_rent_m = monthly_rent * 0.80
     
-    # 3. Define the New Mortgage Payment
+    # 3. New Mortgage Commitment
     new_mortgage_m = monthly_io if loan_type == "Interest Only" else monthly_pi
     
-    # 4. Calculate Final Cash Flow Position
+    # 4. Final Totals
     total_income_m = total_net_income_m + shaded_rent_m
     total_commitments_m = total_monthly_living + total_existing_debt_m + new_mortgage_m
     monthly_surplus = total_income_m - total_commitments_m
     
-    # Display the breakdown cleanly
     srv1, srv2 = st.columns([1, 1])
-    
     with srv1:
-        st.write("**INFLOWS (Net Take-Home)**")
-        st.write(f"Inv 1 ({s1_freq}): **${inv1_take_home:,.2f}**")
-        st.write(f"Inv 2 ({s2_freq}): **${inv2_take_home:,.2f}**")
-        st.write(f"Proposed Rent (80% Shade): **${shaded_rent_m:,.2f}**")
+        st.write("**INFLOWS (Actual Take-Home)**")
+        st.write(f"Inv 1 Net ({s1_freq}): **${s1_input:,.2f}**")
+        st.write(f"Inv 2 Net ({s2_freq}): **${s2_input:,.2f}**")
+        st.write(f"Proposed Rent (80% Bank Shade): **${shaded_rent_m:,.2f}**")
         st.markdown(f"### Total Monthly Inflow: <span style='color:#00cc96'>${total_income_m:,.2f}</span>", unsafe_allow_html=True)
         
     with srv2:
@@ -564,12 +561,10 @@ with tab10:
         
     st.divider()
     
-    # Final Metric Highlight
-    st.write("### Estimated Monthly Surplus / Deficit")
     if monthly_surplus >= 0:
-        st.success(f"You have an estimated household surplus of **${monthly_surplus:,.2f} per month** after all commitments and taxes.")
+        st.success(f"You have an estimated household surplus of **${monthly_surplus:,.2f} per month**.")
     else:
-        st.error(f"Warning: You have an estimated household deficit of **${abs(monthly_surplus):,.2f} per month**. Lenders may reject this application without further income.")
+        st.error(f"Warning: Estimated household deficit of **${abs(monthly_surplus):,.2f} per month**.")
 
 # --- PDF GENERATION LOGIC ---
 st.markdown("---")
