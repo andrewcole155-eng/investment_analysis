@@ -131,16 +131,6 @@ cars = col_spec3.number_input("Cars", value=int(st.session_state.form_data["cars
 # Ensure Purchase Price is Float because step is 10000.0 (implied by typical usage)
 purchase_price = st.sidebar.number_input("Purchase Price ($)", value=float(st.session_state.form_data["price"]), step=10000.0)
 
-st.sidebar.subheader("Tax Profiles (Post-Tax)")
-
-col_s1_val, col_s1_freq = st.sidebar.columns([2, 1])
-s1_input = col_s1_val.number_input("Inv 1 Take-Home ($)", value=float(st.session_state.form_data["sal1"]), step=100.0)
-s1_freq = col_s1_freq.selectbox("Freq", ["Fortnightly", "Monthly", "Annually"], key="s1_f")
-
-col_s2_val, col_s2_freq = st.sidebar.columns([2, 1])
-s2_input = col_s2_val.number_input("Inv 2 Take-Home ($)", value=float(st.session_state.form_data["sal2"]), step=100.0)
-s2_freq = col_s2_freq.selectbox("Freq", ["Monthly", "Fortnightly", "Annually"], key="s2_f")
-
 # --- GEMINI AI YIELD ESTIMATOR ---
 @st.cache_data(ttl=3600, show_spinner=False)
 def fetch_market_yield(address, beds, baths, cars):
@@ -213,22 +203,40 @@ purchase_price = st.sidebar.number_input(
 
 st.sidebar.subheader("Tax Profiles (Post-Tax)")
 
-# Investor 1 - Default 3850 Fortnightly
+# Investor 1
 col_s1_val, col_s1_freq = st.sidebar.columns([2, 1])
-s1_input = col_s1_val.number_input("Inv 1 Take-Home ($)", value=st.session_state.form_data["sal1"], step=100.0)
-s1_freq = col_s1_freq.selectbox("Freq", ["Fortnightly", "Monthly", "Annually"], key="s1_f")
+s1_input = col_s1_val.number_input(
+    "Inv 1 Take-Home ($)", 
+    value=float(st.session_state.form_data["sal1"]), 
+    step=100.0,
+    key="salary_input_1"  # Unique Key
+)
+s1_freq = col_s1_freq.selectbox(
+    "Freq", 
+    ["Fortnightly", "Monthly", "Annually"], 
+    key="s1_freq_selector" # Unique Key
+)
 
-# Investor 2 - Default 8500 Monthly
+# Investor 2
 col_s2_val, col_s2_freq = st.sidebar.columns([2, 1])
-s2_input = col_s2_val.number_input("Inv 2 Take-Home ($)", value=st.session_state.form_data["sal2"], step=100.0)
-s2_freq = col_s2_freq.selectbox("Freq", ["Monthly", "Fortnightly", "Annually"], key="s2_f")
+s2_input = col_s2_val.number_input(
+    "Inv 2 Take-Home ($)", 
+    value=float(st.session_state.form_data["sal2"]), 
+    step=100.0,
+    key="salary_input_2"  # Unique Key
+)
+s2_freq = col_s2_freq.selectbox(
+    "Freq", 
+    ["Monthly", "Fortnightly", "Annually"], 
+    key="s2_freq_selector" # Unique Key
+)
 
 # Mapping for annualization
 freq_map = {"Monthly": 12, "Fortnightly": 26, "Annually": 1}
 annual_net_1 = s1_input * freq_map[s1_freq]
 annual_net_2 = s2_input * freq_map[s2_freq]
 
-# These variables are now used by the math engine
+# Global variables for the math engine
 salary_1 = annual_net_1
 salary_2 = annual_net_2
 
