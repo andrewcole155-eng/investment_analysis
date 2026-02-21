@@ -70,50 +70,76 @@ def save_to_history(name, url, params):
     history_df = history_df.drop_duplicates(subset=["Property Name", "Listing URL"], keep="last")
     history_df.to_csv(HISTORY_FILE, index=False)
 
-# --- SESSION STATE FOR REVISITING ---
+# --- 1. SESSION STATE (ENFORCING FLOATS) ---
 if "form_data" not in st.session_state:
     st.session_state.form_data = {
         "prop_name": "2 Example Street MELBOURNE",
         "prop_url": "https://www.realestate.com.au/",
-        "price": 650000,
-        "beds": 2, "baths": 1, "cars": 1,
-        "sal1": 3850.0,            # Investor 1 Default
-        "sal2": 8500.0,            # Investor 2 Default
+        "price": 650000.0,         # Added .0
+        "beds": 2, 
+        "baths": 1, 
+        "cars": 1,
+        "sal1": 3850.0,            
+        "sal2": 8500.0,            
         "split": 50,
-        "growth": 4.0, "hold": 10,
+        "growth": 4.0, 
+        "hold": 10,
         "living_expenses_json": json.dumps(DEFAULT_LIVING_EXPENSES_DATA),
-        "ext_mortgage": 2921.0,    # Set as requested
+        "ext_mortgage": 2921.0,    
         "ext_car_loan": 0.0,
         "ext_cc": 0.0,
         "ext_other": 0.0
     }
 
+# --- 2. LOAD PROPERTY FUNCTION (ENFORCING FLOATS) ---
 def load_property(row):
     st.session_state.form_data = {
         "prop_name": row["Property Name"],
         "prop_url": row["Listing URL"],
-        "price": int(row["purchase_price"]),
+        "price": float(row["purchase_price"]), # Force Float
         "beds": int(row["beds"]),
         "baths": int(row["baths"]),
         "cars": int(row["cars"]),
-        "sal1": int(row["salary_1"]),
-        "sal2": int(row["salary_2"]),
+        "sal1": float(row["salary_1"]),       # Force Float
+        "sal2": float(row["salary_2"]),       # Force Float
         "split": int(row["ownership_split"] * 100),
         "growth": float(row["growth_rate"] * 100),
         "hold": int(row["holding_period"])
     }
     
-    # Load custom expenses
     if "living_expenses_json" in row and pd.notna(row["living_expenses_json"]):
         st.session_state.form_data["living_expenses_json"] = row["living_expenses_json"]
     else:
         st.session_state.form_data["living_expenses_json"] = json.dumps(DEFAULT_LIVING_EXPENSES_DATA)
         
-    # NEW: Load custom debts (using .get() safely for old history items)
     st.session_state.form_data["ext_mortgage"] = float(row.get("ext_mortgage", 0.0))
     st.session_state.form_data["ext_car_loan"] = float(row.get("ext_car_loan", 0.0))
     st.session_state.form_data["ext_cc"] = float(row.get("ext_cc", 0.0))
     st.session_state.form_data["ext_other"] = float(row.get("ext_other", 0.0))
+
+# --- 3. SIDEBAR INPUTS (ENSURE VALUE TYPES MATCH STEP TYPES) ---
+st.sidebar.header("📍 Core Parameters")
+property_name = st.sidebar.text_input("Property Name/Address", value=st.session_state.form_data["prop_name"])
+property_url = st.sidebar.text_input("Property Listing URL", value=st.session_state.form_data["prop_url"])
+
+col_spec1, col_spec2, col_spec3 = st.sidebar.columns(3)
+# Keep beds/baths as Integers (Step=1, Value=Int)
+beds = col_spec1.number_input("Beds", value=int(st.session_state.form_data["beds"]), step=1)
+baths = col_spec2.number_input("Baths", value=int(st.session_state.form_data["baths"]), step=1)
+cars = col_spec3.number_input("Cars", value=int(st.session_state.form_data["cars"]), step=1)
+
+# Ensure Purchase Price is Float because step is 10000.0 (implied by typical usage)
+purchase_price = st.sidebar.number_input("Purchase Price ($)", value=float(st.session_state.form_data["price"]), step=10000.0)
+
+st.sidebar.subheader("Tax Profiles (Post-Tax)")
+
+col_s1_val, col_s1_freq = st.sidebar.columns([2, 1])
+s1_input = col_s1_val.number_input("Inv 1 Take-Home ($)", value=float(st.session_state.form_data["sal1"]), step=100.0)
+s1_freq = col_s1_freq.selectbox("Freq", ["Fortnightly", "Monthly", "Annually"], key="s1_f")
+
+col_s2_val, col_s2_freq = st.sidebar.columns([2, 1])
+s2_input = col_s2_val.number_input("Inv 2 Take-Home ($)", value=float(st.session_state.form_data["sal2"]), step=100.0)
+s2_freq = col_s2_freq.selectbox("Freq", ["Monthly", "Fortnightly", "Annually"], key="s2_f")
 
 # --- GEMINI AI YIELD ESTIMATOR ---
 @st.cache_data(ttl=3600, show_spinner=False)
