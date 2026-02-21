@@ -741,7 +741,7 @@ def generate_pdf(salary_1_annual, salary_2_annual, total_monthly_living, total_e
     pdf = InvestmentReportPDF()
     pdf.add_page()
     
-    # --- HEADER ---
+    # --- HEADER & RESTORED LINK ---
     pdf.set_font("helvetica", "B", 16)
     pdf.cell(0, 8, property_name, new_x="LMARGIN", new_y="NEXT")
     pdf.set_font("helvetica", "", 11)
@@ -788,16 +788,23 @@ def generate_pdf(salary_1_annual, salary_2_annual, total_monthly_living, total_e
     pdf.set_text_color(0, 0, 0)
     pdf.ln(3)
 
-    # --- 4. MONTHLY HOUSEHOLD SERVICEABILITY ---
+    # --- 4. MONTHLY HOUSEHOLD SERVICEABILITY (FIXED MATH) ---
     pdf.section_header("4. Monthly Household Serviceability")
+    
+    # Strict monthly conversion to prevent hallucinations
     total_household_net_m = (salary_1_annual + salary_2_annual) / 12
     shaded_rent_m = (monthly_rent * 0.80) 
     new_mortgage_m = monthly_io if loan_type == "Interest Only" else monthly_pi
-    net_monthly_surplus = (total_household_net_m + shaded_rent_m) - (total_monthly_living + total_existing_debt_m + new_mortgage_m)
+    
+    # Final surplus calculation
+    monthly_inflow = total_household_net_m + shaded_rent_m
+    monthly_outflow = total_monthly_living + total_existing_debt_m + new_mortgage_m
+    net_monthly_surplus = monthly_inflow - monthly_outflow
 
     pdf.set_font("helvetica", "B", 10)
     pdf.cell(0, 7, "Serviceability Breakdown (Monthly):", new_x="LMARGIN", new_y="NEXT")
     pdf.set_font("helvetica", "", 10)
+    
     pdf.row("Take-Home Pay:", f"${total_household_net_m:,.2f}", "Living Expenses:", f"-${total_monthly_living:,.2f}")
     pdf.row("Rental Income (80%):", f"${shaded_rent_m:,.2f}", "Existing Debts:", f"-${total_existing_debt_m:,.2f}")
     pdf.row("New Property Loan:", f"-${new_mortgage_m:,.2f}")
@@ -811,6 +818,7 @@ def generate_pdf(salary_1_annual, salary_2_annual, total_monthly_living, total_e
         pdf.set_text_color(200, 0, 0)
         pdf.set_font("helvetica", "B", 12)
         pdf.cell(0, 10, f"ESTIMATED MONTHLY DEFICIT: ${abs(net_monthly_surplus):,.2f}", align="R", new_x="LMARGIN", new_y="NEXT")
+    
     pdf.set_text_color(0, 0, 0)
     pdf.ln(5)
 
@@ -829,6 +837,7 @@ def generate_pdf(salary_1_annual, salary_2_annual, total_monthly_living, total_e
     pdf.cell(30, 7, "Year", border=1, align="C", fill=True)
     pdf.cell(80, 7, "Estimated Value", border=1, align="C", fill=True)
     pdf.cell(80, 7, "Estimated Equity", border=1, align="C", fill=True, new_x="LMARGIN", new_y="NEXT")
+    
     pdf.set_font("helvetica", "", 9)
     for yr in [1, 3, 5, 10]:
         if yr <= holding_period:
@@ -838,8 +847,7 @@ def generate_pdf(salary_1_annual, salary_2_annual, total_monthly_living, total_e
             pdf.cell(80, 7, f"${val:,.0f}", border=1, align="C")
             pdf.cell(80, 7, f"${eq:,.0f}", border=1, align="C", new_x="LMARGIN", new_y="NEXT")
     
-    # --- PAGE 2: CHARTS ---
-    pdf.add_page()
+    # --- CHARTS ---
     pdf.section_header("7. Equity & Value Projections")
     
     fig, ax = plt.subplots(figsize=(8, 4.5)) 
