@@ -165,23 +165,46 @@ with tab6:
     st.write("Detailed Breakdown")
     st.dataframe(df_chart.style.format("${:,.0f}"))
 
+# --- TAB 7: CGT PROJECTION ---
+with tab7:
+    st.subheader("Capital Gains Tax (Year 10 Sale)")
+    
+    # We grab the Year 10 value from the projections
+    sale_price = future_values[-1] 
+    
+    # Matching your Excel logic
+    capital_gain = sale_price - purchase_price
+    cgt_discount = capital_gain * 0.50  # 50% discount for holding > 12 months
+    
+    # Estimate marginal tax rate based on salary (or allow manual input like your Excel)
+    est_marginal_rate = st.number_input("Marginal Tax Rate for Sale Year (%)", value=35.0) / 100
+    
+    cgt_payable = cgt_discount * est_marginal_rate
+    net_profit_on_sale = capital_gain - cgt_payable
+
+    st.divider()
+    c_col1, c_col2 = st.columns(2)
+    c_col1.metric("Estimated Sale Price (Year 10)", f"${sale_price:,.0f}")
+    c_col1.metric("Gross Capital Gain", f"${capital_gain:,.0f}")
+    
+    c_col2.metric("Estimated CGT Payable", f"${cgt_payable:,.0f}")
+    c_col2.metric("Net Profit After Tax", f"${net_profit_on_sale:,.0f}")
+
 # --- PDF GENERATION LOGIC ---
 st.markdown("---")
 st.subheader("📄 Export Analysis Report")
 
 def generate_pdf():
-    # 1. Create a custom PDF class for Header/Footer & Styling
     class InvestmentReportPDF(FPDF):
         def header(self):
-            # Include your AQI Logo
-            logo_path = "/home/andrew/.ssh/Trading/_MelbInvestments/AQI_Logo.png"
+            # FIXED LOGO PATH (Relative path - ensure image is in same folder as app.py)
+            logo_path = "AQI_Logo.png" 
             if os.path.exists(logo_path):
-                self.image(logo_path, 10, 8, 30) # x, y, width
+                self.image(logo_path, 10, 8, 30)
             
-            # Header Text
             self.set_font("helvetica", "B", 20)
-            self.set_text_color(0, 51, 102) # Dark blue
-            self.cell(40) # Push text to the right of the logo
+            self.set_text_color(0, 51, 102)
+            self.cell(40) 
             self.cell(0, 15, "Property Investment Analysis", ln=True, align="L")
             self.ln(10)
 
@@ -193,7 +216,7 @@ def generate_pdf():
 
         def section_header(self, title):
             self.set_font("helvetica", "B", 14)
-            self.set_fill_color(230, 240, 255) # Light blue background
+            self.set_fill_color(230, 240, 255)
             self.set_text_color(0, 0, 0)
             self.cell(0, 10, f"  {title}", ln=True, fill=True)
             self.ln(3)
@@ -204,18 +227,17 @@ def generate_pdf():
             self.set_font("helvetica", "B", 12)
             self.cell(0, 8, value, ln=True, border=0)
 
-    # 2. Initialize PDF
     pdf = InvestmentReportPDF()
     pdf.add_page()
     
-    # 3. Section 1: Acquisition
+    # 1. Acquisition
     pdf.section_header("1. Acquisition & Capital Required")
     pdf.row("Purchase Price:", f"${purchase_price:,.0f}")
-    pdf.row("Total Entry Costs (Stamp Duty, etc.):", f"${total_acquisition_costs:,.0f}")
+    pdf.row("Total Entry Costs:", f"${total_acquisition_costs:,.0f}")
     pdf.row("Total Funds Required:", f"${total_cost_base:,.0f}")
     pdf.ln(5)
     
-    # 4. Section 2: Cash Flow & Tax
+    # 2. Cash Flow
     pdf.section_header("2. Annual Cash Flow & Tax Impact")
     pdf.row("Gross Annual Income:", f"${annual_gross_income:,.0f}")
     pdf.row("Total Operating Expenses:", f"${total_operating_expenses:,.0f}")
@@ -223,33 +245,39 @@ def generate_pdf():
     pdf.row("Net Post-Tax Cash Flow:", f"${post_tax_cashflow:,.0f}")
     pdf.ln(5)
     
-    # 5. Section 3: Projections
+    # 3. Projections
     pdf.section_header("3. 10-Year Wealth Forecast")
     pdf.row("Estimated Property Value (Year 10):", f"${future_values[-1]:,.0f}")
     pdf.row("Estimated Equity (Year 10):", f"${equity[-1]:,.0f}")
     pdf.ln(5)
 
-    # 6. Generate the Matplotlib Chart for the PDF
+    # 4. CGT & Sale Profit (NEW)
+    pdf.section_header("4. Sale & Capital Gains Tax (Year 10)")
+    pdf.row("Estimated Capital Gain:", f"${capital_gain:,.0f}")
+    pdf.row("Estimated CGT Payable:", f"${cgt_payable:,.0f}")
+    pdf.row("Net Profit (After Tax):", f"${net_profit_on_sale:,.0f}")
+    pdf.ln(5)
+
+    # Chart Generation
     fig, ax = plt.subplots(figsize=(8, 4))
     ax.plot(df_chart.index, df_chart["Property Value"], label="Property Value", color="#1f77b4", linewidth=2)
     ax.plot(df_chart.index, df_chart["Equity"], label="Equity", color="#2ca02c", linewidth=2)
     
-    # Chart Styling
     ax.set_title("10-Year Growth & Equity Accumulation", fontsize=14, pad=10)
     ax.set_xlabel("Holding Year", fontsize=10)
     ax.set_ylabel("Value ($)", fontsize=10)
     ax.grid(True, linestyle="--", alpha=0.6)
     ax.legend(loc="upper left")
-    
-    # Format Y-axis to show dollar values nicely
     ax.get_yaxis().set_major_formatter(plt.FuncFormatter(lambda x, loc: "{:,}".format(int(x))))
     
-    # Save chart to a temporary buffer in memory
     img_buffer = io.BytesIO()
     plt.savefig(img_buffer, format="png", bbox_inches="tight", dpi=150)
     img_buffer.seek(0)
     
-    # 7. Inject Chart into FPDF
+    # Since we added a new section, we check if we need a page break before the chart
+    if pdf.get_y() > 200:
+        pdf.add_page()
+        
     pdf.image(img_buffer, x=15, w=180)
 
     return bytes(pdf.output())
