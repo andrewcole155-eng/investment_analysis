@@ -226,14 +226,16 @@ s2_freq = col_s2_freq.selectbox(
     key="s2_freq_selector" # Unique Key
 )
 
-# Mapping for annualization
+# --- Mapping for annualization ---
 freq_map = {"Monthly": 12, "Fortnightly": 26, "Annually": 1}
-annual_net_1 = s1_input * freq_map[s1_freq]
-annual_net_2 = s2_input * freq_map[s2_freq]
 
-# Global variables for the math engine
-salary_1 = annual_net_1
-salary_2 = annual_net_2
+# These are the variables your PDF and Tab logic now require
+salary_1_annual = s1_input * freq_map[s1_freq]
+salary_2_annual = s2_input * freq_map[s2_freq]
+
+# We define these as well so your Tab 6 and Tab 10 calculations don't break
+salary_1 = salary_1_annual
+salary_2 = salary_2_annual
 
 ownership_split_val = st.sidebar.slider("Ownership Split (Inv 1 %)", 0, 100, st.session_state.form_data["split"])
 ownership_split = ownership_split_val / 100
@@ -455,33 +457,35 @@ with tab6:
     st.markdown("This section evaluates if the household can support this loan after factoring in all living expenses and existing debts.")
 
     # Calculate Monthly Figures
-    # Banks usually shade rental income by 20% to account for vacancies/costs
     shaded_rent_m = (annual_gross_income / 12) * 0.80
-    total_net_salary_m = (salary_1 + salary_2) / 12
+    total_net_salary_m = (salary_1_annual + salary_2_annual) / 12
     
-    # Lenders often assess serviceability at the P&I rate even for IO loans
+    # We use the PI amount for bank assessment standard
     assessment_mortgage_m = monthly_pi 
     
     total_monthly_inflow = total_net_salary_m + shaded_rent_m
     total_monthly_outflow = total_monthly_living + total_existing_debt_m + assessment_mortgage_m
     
     monthly_surplus = total_monthly_inflow - total_monthly_outflow
-    
+        
     # Display Serviceability Dashboard
     srv_col1, srv_col2 = st.columns(2)
-    
     with srv_col1:
         st.write("**Monthly Inflows**")
         st.write(f"Total Net Salaries: `${total_net_salary_m:,.2f}`")
         st.write(f"Shaded Rental Income (80%): `${shaded_rent_m:,.2f}`")
         st.markdown(f"**Total Inflow: ${total_monthly_inflow:,.2f}**")
-
     with srv_col2:
         st.write("**Monthly Outflows**")
         st.write(f"Living Expenses: `${total_monthly_living:,.2f}`")
         st.write(f"Existing Debts: `${total_existing_debt_m:,.2f}`")
         st.write(f"New Loan (P&I Assessment): `${assessment_mortgage_m:,.2f}`")
         st.markdown(f"**Total Outflow: ${total_monthly_outflow:,.2f}**")
+
+    if monthly_surplus > 0:
+        st.success(f"### ✅ Serviceable\nMonthly household surplus: **${monthly_surplus:,.2f}**")
+    else:
+        st.error(f"### ⚠️ Warning: Deficit\nMonthly household deficit: **${abs(monthly_surplus):,.2f}**")
 
     st.divider()
 
@@ -689,7 +693,7 @@ with tab10:
 st.markdown("---")
 st.subheader("📄 Export Analysis Report")
 
-def generate_pdf():
+def generate_pdf(salary_1_annual, salary_2_annual, total_monthly_living, total_existing_debt_m):
     # Fetch AI Market Yield Data
     market_yield = fetch_market_yield(property_name, beds, baths, cars)
     property_yield = (annual_gross_income / purchase_price) * 100
@@ -887,7 +891,7 @@ def generate_pdf():
     return bytes(pdf.output())
 
 # --- DOWNLOAD BUTTON ---
-pdf_bytes = generate_pdf()
+pdf_bytes = generate_pdf(salary_1_annual, salary_2_annual, total_monthly_living, total_existing_debt_m)
 st.download_button(
     label="⬇️ Download Full Summary PDF",
     data=pdf_bytes,
