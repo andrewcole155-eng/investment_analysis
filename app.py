@@ -92,7 +92,7 @@ if "form_data" not in st.session_state:
         "ext_mortgage": 2921.0, "ext_car_loan": 0.0, "ext_cc": 0.0, "ext_other": 0.0
     }
 
-# --- 2. LOAD PROPERTY FUNCTION (FIXED SIDEBAR SYNC) ---
+# --- 2. LOAD PROPERTY FUNCTION (CALLBACK VERSION) ---
 def load_property(row):
     # 1. Update the 'Source of Truth' dictionary
     st.session_state.form_data = {
@@ -116,21 +116,22 @@ def load_property(row):
         "ext_other": float(row.get("ext_other", 0.0))
     }
 
-    # 2. FORCE UPDATE: Inject data directly into widget keys to update the Sidebar
-    st.session_state["sb_prop_name"] = st.session_state.form_data["prop_name"]
-    st.session_state["sb_prop_url"] = st.session_state.form_data["prop_url"]
-    st.session_state["sb_price"] = st.session_state.form_data["price"]
-    st.session_state["sb_beds"] = st.session_state.form_data["beds"]
-    st.session_state["sb_baths"] = st.session_state.form_data["baths"]
-    st.session_state["sb_cars"] = st.session_state.form_data["cars"]
-    st.session_state["salary_input_1"] = st.session_state.form_data["s1_input"]
-    st.session_state["s1_freq_selector"] = st.session_state.form_data["s1_freq"]
-    st.session_state["salary_input_2"] = st.session_state.form_data["s2_input"]
-    st.session_state["s2_freq_selector"] = st.session_state.form_data["s2_freq"]
-    st.session_state["sb_ext_mortgage"] = st.session_state.form_data["ext_mortgage"]
-    st.session_state["sb_ext_car_loan"] = st.session_state.form_data["ext_car_loan"]
-    st.session_state["sb_ext_cc"] = st.session_state.form_data["ext_cc"]
-    st.session_state["sb_ext_other"] = st.session_state.form_data["ext_other"]
+    # 2. Inject data directly into widget keys 
+    # (This is now perfectly safe because it runs BEFORE the widgets are drawn)
+    st.session_state.sb_prop_name = st.session_state.form_data["prop_name"]
+    st.session_state.sb_prop_url = st.session_state.form_data["prop_url"]
+    st.session_state.sb_price = st.session_state.form_data["price"]
+    st.session_state.sb_beds = st.session_state.form_data["beds"]
+    st.session_state.sb_baths = st.session_state.form_data["baths"]
+    st.session_state.sb_cars = st.session_state.form_data["cars"]
+    st.session_state.salary_input_1 = st.session_state.form_data["s1_input"]
+    st.session_state.s1_freq_selector = st.session_state.form_data["s1_freq"]
+    st.session_state.salary_input_2 = st.session_state.form_data["s2_input"]
+    st.session_state.s2_freq_selector = st.session_state.form_data["s2_freq"]
+    st.session_state.sb_ext_mortgage = st.session_state.form_data["ext_mortgage"]
+    st.session_state.sb_ext_car_loan = st.session_state.form_data["ext_car_loan"]
+    st.session_state.sb_ext_cc = st.session_state.form_data["ext_cc"]
+    st.session_state.sb_ext_other = st.session_state.form_data["ext_other"]
             
     # 3. Rerun to instantly show the changes
     st.rerun()
@@ -605,10 +606,10 @@ with tab9:
                 
                 c2.write(f"**{row['Property Name']}**")
                 c3.write(f"📅 {row['Date of PDF']}")
-                # Revisit Action
-                if c4.button("🔄 Revisit", key=f"rev_{index}"):
-                    load_property(row)
-                    st.rerun()
+                
+                # CRITICAL FIX: The Revisit button now uses a Callback (on_click)
+                c4.button("🔄 Revisit", key=f"rev_{index}", on_click=load_property, args=(row,))
+                
                 st.divider()
 
         if st.button("🗑️ Clear History"):
