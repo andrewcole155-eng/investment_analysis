@@ -16,16 +16,22 @@ st.markdown("---")
 # --- LOCAL DATABASE CONFIG ---
 HISTORY_FILE = "property_history.csv"
 
-def save_to_history(name, url):
-    """Saves property search to local CSV when PDF is generated."""
+def save_to_history(name, url, params):
+    """Saves property search and ALL parameters to local CSV."""
     if not url or url.strip() == "":
         url = "No Link Provided"
         
-    new_entry = pd.DataFrame({
+    entry_data = {
         "Date of PDF": [datetime.now().strftime("%Y-%m-%d %H:%M:%S")],
         "Property Name": [name],
-        "Listing URL": [url]
-    })
+        "Listing URL": [url],
+        "Favorite": [False]
+    }
+    # Flatten params into the dictionary
+    for key, value in params.items():
+        entry_data[key] = [value]
+
+    new_entry = pd.DataFrame(entry_data)
     
     if os.path.exists(HISTORY_FILE):
         history_df = pd.read_csv(HISTORY_FILE)
@@ -33,31 +39,59 @@ def save_to_history(name, url):
     else:
         history_df = new_entry
         
-    # Deduplicate: Keep only the most recent entry for each URL
-    history_df = history_df.drop_duplicates(subset=["Listing URL"], keep="last")
+    history_df = history_df.drop_duplicates(subset=["Property Name", "Listing URL"], keep="last")
     history_df.to_csv(HISTORY_FILE, index=False)
+
+# --- SESSION STATE FOR REVISITING ---
+if "form_data" not in st.session_state:
+    st.session_state.form_data = {
+        "prop_name": "2 Example Street MELBOURNE",
+        "prop_url": "https://www.realestate.com.au/",
+        "price": 650000,
+        "beds": 2, "baths": 1, "cars": 1,
+        "sal1": 150000, "sal2": 150000, "split": 50,
+        "growth": 4.0, "hold": 10
+    }
+
+def load_property(row):
+    # This updates the session state which the sidebar inputs then consume
+    st.session_state.form_data = {
+        "prop_name": row["Property Name"],
+        "prop_url": row["Listing URL"],
+        "price": int(row["purchase_price"]),
+        "beds": int(row["beds"]),
+        "baths": int(row["baths"]),
+        "cars": int(row["cars"]),
+        "sal1": int(row["salary_1"]),
+        "sal2": int(row["salary_2"]),
+        "split": int(row["ownership_split"] * 100),
+        "growth": float(row["growth_rate"] * 100),
+        "hold": int(row["holding_period"])
+    }
 
 # --- 1. GLOBAL INPUTS (SIDEBAR) ---
 st.sidebar.header("📍 Core Parameters")
-property_name = st.sidebar.text_input("Property Name/Address", value="2 Example Street MELBOURNE")
-property_url = st.sidebar.text_input("Property Listing URL", value="https://www.realestate.com.au/")
+# We use the session_state values as the 'value' for each input
+property_name = st.sidebar.text_input("Property Name/Address", value=st.session_state.form_data["prop_name"])
+property_url = st.sidebar.text_input("Property Listing URL", value=st.session_state.form_data["prop_url"])
 
-# NEW: Property Specs
 col_spec1, col_spec2, col_spec3 = st.sidebar.columns(3)
-beds = col_spec1.number_input("Beds", value=2, step=1)
-baths = col_spec2.number_input("Baths", value=1, step=1)
-cars = col_spec3.number_input("Cars", value=1, step=1)
+beds = col_spec1.number_input("Beds", value=st.session_state.form_data["beds"], step=1)
+baths = col_spec2.number_input("Baths", value=st.session_state.form_data["baths"], step=1)
+cars = col_spec3.number_input("Cars", value=st.session_state.form_data["cars"], step=1)
 
-purchase_price = st.sidebar.number_input("Purchase Price ($)", value=650000, step=10000)
+purchase_price = st.sidebar.number_input("Purchase Price ($)", value=st.session_state.form_data["price"], step=10000)
 
-st.sidebar.subheader("Tax Profiles (Joint Ownership)")
-salary_1 = st.sidebar.number_input("Investor 1 Salary ($)", value=150000, step=5000)
-salary_2 = st.sidebar.number_input("Investor 2 Salary ($)", value=150000, step=5000)
-ownership_split = st.sidebar.slider("Ownership Split (Inv 1 %)", 0, 100, 50) / 100
+st.sidebar.subheader("Tax Profiles")
+salary_1 = st.sidebar.number_input("Investor 1 Salary ($)", value=st.session_state.form_data["sal1"], step=5000)
+salary_2 = st.sidebar.number_input("Investor 2 Salary ($)", value=st.session_state.form_data["sal2"], step=5000)
+ownership_split_val = st.sidebar.slider("Ownership Split (Inv 1 %)", 0, 100, st.session_state.form_data["split"])
+ownership_split = ownership_split_val / 100
 
 st.sidebar.subheader("Projections")
-growth_rate = st.sidebar.slider("Expected Annual Growth (%)", 0.0, 12.0, 4.0, step=0.5) / 100
-holding_period = st.sidebar.slider("Holding Period (Years)", 1, 30, 10)
+growth_rate_val = st.sidebar.slider("Expected Annual Growth (%)", 0.0, 12.0, st.session_state.form_data["growth"], step=0.5)
+growth_rate = growth_rate_val / 100
+holding_period = st.sidebar.slider("Holding Period (Years)", 1, 30, st.session_state.form_data["hold"])
 
 # --- 2. CREATE TABS ---
 # Reordered to put Summary first
@@ -312,8 +346,31 @@ with tab0:
 with tab9:
     st.subheader("📚 Property Search History")
     if os.path.exists(HISTORY_FILE):
-        history_df = pd.read_csv(HISTORY_FILE).sort_values(by="Date of PDF", ascending=False).reset_index(drop=True)
-        st.dataframe(history_df, column_config={"Listing URL": st.column_config.LinkColumn("Listing URL")}, hide_index=True, use_container_width=True)
+        history_df = pd.read_csv(HISTORY_FILE)
+        
+        # Sorting Logic: Favorites (True) first, then Date (Descending)
+        history_df = history_df.sort_values(by=["Favorite", "Date of PDF"], ascending=[False, False]).reset_index(drop=True)
+        
+        for index, row in history_df.iterrows():
+            with st.container():
+                c1, c2, c3, c4 = st.columns([0.1, 0.4, 0.3, 0.2])
+                
+                # Favorite Toggle
+                is_fav = "⭐" if row["Favorite"] else "☆"
+                if c1.button(is_fav, key=f"fav_{index}"):
+                    history_df.at[index, "Favorite"] = not row["Favorite"]
+                    history_df.to_csv(HISTORY_FILE, index=False)
+                    st.rerun()
+                
+                c2.write(f"**{row['Property Name']}**")
+                c3.write(f"📅 {row['Date of PDF']}")
+                
+                # Revisit Action
+                if c4.button("🔄 Revisit", key=f"rev_{index}"):
+                    load_property(row)
+                    st.rerun()
+                st.divider()
+
         if st.button("🗑️ Clear History"):
             os.remove(HISTORY_FILE)
             st.rerun()
@@ -454,5 +511,12 @@ st.download_button(
     file_name=f"{property_name.replace(' ', '_')}_Summary.pdf",
     mime="application/pdf",
     on_click=save_to_history,
-    args=(property_name, property_url)
+    args=(property_name, property_url, {
+        "purchase_price": purchase_price,
+        "beds": beds, "baths": baths, "cars": cars,
+        "salary_1": salary_1, "salary_2": salary_2,
+        "ownership_split": ownership_split,
+        "growth_rate": growth_rate,
+        "holding_period": holding_period
+    })
 )
