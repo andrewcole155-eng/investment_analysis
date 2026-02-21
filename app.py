@@ -888,6 +888,13 @@ def generate_pdf(salary_1_annual, salary_2_annual, total_monthly_living, total_e
     return bytes(pdf.output())
 
 # --- DOWNLOAD BUTTON (BOTTOM OF SCRIPT) ---
+pdf_bytes = generate_pdf(
+    salary_1_annual, 
+    salary_2_annual, 
+    total_monthly_living, 
+    total_existing_debt_m
+)
+
 st.download_button(
     label="⬇️ Download Full Summary PDF",
     data=pdf_bytes,
@@ -897,13 +904,13 @@ st.download_button(
     args=(property_name, property_url, {
         "purchase_price": purchase_price,
         "beds": beds, "baths": baths, "cars": cars,
-        "salary_1": salary_1_annual,
+        "salary_1": salary_1_annual, # Saves correctly for Revisit
         "salary_2": salary_2_annual,
         "ownership_split": ownership_split,
         "growth_rate": growth_rate,
         "holding_period": holding_period,
         "living_expenses_json": st.session_state.form_data["living_expenses_json"],
-        # CRITICAL: Add these so they save to the CSV
+        # Ensuring these are saved to history.csv
         "ext_mortgage": ext_mortgage,
         "ext_car_loan": ext_car_loan,
         "ext_cc": ext_cc,
