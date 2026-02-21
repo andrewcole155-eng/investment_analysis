@@ -28,10 +28,11 @@ growth_rate = st.sidebar.slider("Expected Annual Growth (%)", 0.0, 12.0, 4.0, st
 holding_period = st.sidebar.slider("Holding Period (Years)", 1, 30, 10)
 
 # --- 2. CREATE TABS ---
-tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
+tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
     "Property & Acquisition", 
     "Income & Expenses", 
-    "Loan Details", 
+    "Loan Details",
+    "Cash Flow",          # <--- NEW TAB ADDED HERE
     "Depreciation", 
     "Tax & Gearing", 
     "10-Year Projections",
@@ -80,7 +81,7 @@ with tab2:
     metric_col1.metric("Gross Annual Income", f"${annual_gross_income:,.2f}")
     metric_col2.metric("Total Annual Expenses", f"${total_operating_expenses:,.2f}")
 
-# --- TAB 3: LOAN DETAILS (UPDATED) ---
+# --- TAB 3: LOAN DETAILS ---
 with tab3:
     st.subheader("Financing Structure")
     
@@ -89,13 +90,10 @@ with tab3:
     interest_rate = c2.number_input("Interest Rate (%)", value=5.49, step=0.01) / 100
     loan_term = c1.number_input("Loan Term (Years)", value=30, step=1)
     
-    # This determines which calculation drives the REST of the app
     loan_type = c2.selectbox("Active Repayment Type (For Cash Flow)", ["Interest Only", "Principal & Interest"])
     
-    # Calculate Loan Amount (Read-only)
     loan_amount = purchase_price * lvr_pct
     
-    # Perform BOTH calculations to show the comparison
     monthly_io = (loan_amount * interest_rate) / 12
     annual_io = loan_amount * interest_rate
     
@@ -104,13 +102,12 @@ with tab3:
     
     savings_io = annual_pi - annual_io
     
-    # Set variables for the downstream tabs based on the active selection
     if loan_type == "Interest Only":
         annual_repayment = annual_io
         annual_interest = annual_io
     else:
         annual_repayment = annual_pi
-        annual_interest = annual_io # Estimated Year 1 interest for tax purposes
+        annual_interest = annual_io 
         
     st.divider()
     st.markdown(f"### Calculated Loan Amount: **${loan_amount:,.2f}**")
@@ -127,16 +124,45 @@ with tab3:
         st.write(f"**Annual Repayment:** ${annual_io:,.2f}")
         st.markdown(f"**Total Savings of I only: <span style='color:green'>${savings_io:,.2f}</span>**", unsafe_allow_html=True)
 
-# --- TAB 4: DEPRECIATION ---
+# --- TAB 4: CASH FLOW (NEWLY ADDED) ---
 with tab4:
+    st.subheader("Pre-Tax Cash Flow")
+    st.caption("Matches your Excel 'Cash Flow' Worksheet")
+    
+    net_operating_income = annual_gross_income - total_operating_expenses
+    pre_tax_cashflow = net_operating_income - annual_repayment
+    
+    st.divider()
+    cf_col1, cf_col2 = st.columns([1, 1])
+    
+    with cf_col1:
+        st.write("**Annual Rental Income**")
+        st.write("**Annual Operating Expenses**")
+        st.write("**Net Operating Income (NOI)**")
+        st.write(f"**Annual Debt Service ({'IO' if loan_type == 'Interest Only' else 'P&I'})**")
+        st.markdown("### **Annual Cash Flow**")
+        
+    with cf_col2:
+        st.write(f"${annual_gross_income:,.2f}")
+        st.write(f"-${total_operating_expenses:,.2f}")
+        st.write(f"**${net_operating_income:,.2f}**")
+        st.write(f"-${annual_repayment:,.2f}")
+        
+        if pre_tax_cashflow < 0:
+            st.markdown(f"<h3 style='color: #ff4b4b;'>-${abs(pre_tax_cashflow):,.2f}</h3>", unsafe_allow_html=True)
+        else:
+            st.markdown(f"<h3 style='color: #00cc96;'>${pre_tax_cashflow:,.2f}</h3>", unsafe_allow_html=True)
+
+# --- TAB 5: DEPRECIATION ---
+with tab5:
     st.subheader("Tax Depreciation (Non-Cash Deductions)")
     div_43 = st.number_input("Capital Works (Div 43) ($)", value=9000, step=500)
     div_40 = st.number_input("Plant & Equipment (Div 40) ($)", value=8500, step=500)
     total_depreciation = div_43 + div_40
     st.metric("Total Annual Depreciation", f"${total_depreciation:,.2f}")
 
-# --- TAB 5: TAX & NEGATIVE GEARING ---
-with tab5:
+# --- TAB 6: TAX & NEGATIVE GEARING ---
+with tab6:
     st.subheader("Household Tax Impact & Cash Flow")
     
     def calculate_tax(income):
@@ -161,8 +187,6 @@ with tab5:
     tax_variance_2 = base_tax_2 - new_tax_2
     
     total_tax_variance = tax_variance_1 + tax_variance_2
-    
-    pre_tax_cashflow = annual_gross_income - (total_operating_expenses + annual_repayment)
     post_tax_cashflow = pre_tax_cashflow + total_tax_variance
 
     t_col1, t_col2 = st.columns(2)
@@ -179,8 +203,8 @@ with tab5:
     else:
         st.write(f"✅ This property puts **${post_tax_cashflow/52:,.2f} per week** in your household's pocket.")
 
-# --- TAB 6: 10-YEAR PROJECTIONS ---
-with tab6:
+# --- TAB 7: 10-YEAR PROJECTIONS ---
+with tab7:
     st.subheader("Equity & Growth Forecast")
     
     years = np.arange(1, holding_period + 1)
@@ -196,8 +220,8 @@ with tab6:
     st.line_chart(df_chart)
     st.dataframe(df_chart.style.format("${:,.2f}"))
 
-# --- TAB 7: CGT PROJECTION ---
-with tab7:
+# --- TAB 8: CGT PROJECTION ---
+with tab8:
     st.subheader("Capital Gains Tax (Year 10 Sale)")
     
     sale_price = future_values[-1] 
@@ -281,6 +305,8 @@ def generate_pdf():
     pdf.row("Gross Annual Income:", f"${annual_gross_income:,.0f}")
     pdf.row("Total Operating Expenses:", f"${total_operating_expenses:,.0f}")
     pdf.row(f"Annual Debt Servicing ({loan_type}):", f"${annual_repayment:,.0f}")
+    pdf.row("Net Operating Income (NOI):", f"${net_operating_income:,.0f}")
+    pdf.row("Pre-Tax Cash Flow:", f"${pre_tax_cashflow:,.0f}")
     pdf.row("Combined Tax Refund/Payable:", f"${total_tax_variance:,.0f}")
     pdf.row("Net Post-Tax Cash Flow:", f"${post_tax_cashflow:,.0f}")
     pdf.ln(5)
