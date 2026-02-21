@@ -348,6 +348,11 @@ with tab9:
     if os.path.exists(HISTORY_FILE):
         history_df = pd.read_csv(HISTORY_FILE)
         
+        # --- FIX: Handle old CSVs missing the 'Favorite' column ---
+        if "Favorite" not in history_df.columns:
+            history_df["Favorite"] = False
+        # ----------------------------------------------------------
+        
         # Sorting Logic: Favorites (True) first, then Date (Descending)
         history_df = history_df.sort_values(by=["Favorite", "Date of PDF"], ascending=[False, False]).reset_index(drop=True)
         
@@ -356,9 +361,9 @@ with tab9:
                 c1, c2, c3, c4 = st.columns([0.1, 0.4, 0.3, 0.2])
                 
                 # Favorite Toggle
-                is_fav = "⭐" if row["Favorite"] else "☆"
+                is_fav = "⭐" if row.get("Favorite", False) else "☆"
                 if c1.button(is_fav, key=f"fav_{index}"):
-                    history_df.at[index, "Favorite"] = not row["Favorite"]
+                    history_df.at[index, "Favorite"] = not row.get("Favorite", False)
                     history_df.to_csv(HISTORY_FILE, index=False)
                     st.rerun()
                 
@@ -367,6 +372,7 @@ with tab9:
                 
                 # Revisit Action
                 if c4.button("🔄 Revisit", key=f"rev_{index}"):
+                    # We use .get() here as a safety net in case older rows are missing parameters
                     load_property(row)
                     st.rerun()
                 st.divider()
