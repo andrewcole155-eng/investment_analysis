@@ -55,6 +55,7 @@ def save_to_history(name, url, params):
         "Listing URL": [url],
         "Favorite": [False]
     }
+    
     # Flatten params into the dictionary
     for key, value in params.items():
         entry_data[key] = [value]
@@ -62,48 +63,46 @@ def save_to_history(name, url, params):
     new_entry = pd.DataFrame(entry_data)
     
     if os.path.exists(HISTORY_FILE):
-        history_df = pd.read_csv(HISTORY_FILE)
-        history_df = pd.concat([history_df, new_entry], ignore_index=True)
+        try:
+            history_df = pd.read_csv(HISTORY_FILE)
+            # CRITICAL FIX: Explicitly drop the old version of this property so the new one saves
+            history_df = history_df[~((history_df["Property Name"] == name) & (history_df["Listing URL"] == url))]
+            history_df = pd.concat([history_df, new_entry], ignore_index=True)
+        except pd.errors.EmptyDataError:
+            history_df = new_entry
     else:
         history_df = new_entry
         
-    history_df = history_df.drop_duplicates(subset=["Property Name", "Listing URL"], keep="last")
     history_df.to_csv(HISTORY_FILE, index=False)
 
-# --- 1. SESSION STATE (ENFORCING ALL KEYS) ---
+# --- 1. SESSION STATE (FIXED FOR RAW INPUTS) ---
 if "form_data" not in st.session_state:
     st.session_state.form_data = {
         "prop_name": "2 Example Street MELBOURNE",
         "prop_url": "https://www.realestate.com.au/",
         "price": 650000.0,
-        "beds": 2, 
-        "baths": 1, 
-        "cars": 1,
-        "sal1": 3850.0,            
-        "sal2": 8500.0,            
+        "beds": 2, "baths": 1, "cars": 1,
+        "s1_input": 3850.0,         # SAVING RAW INPUT
+        "s1_freq": "Fortnightly",   # SAVING RAW FREQ
+        "s2_input": 8500.0,         # SAVING RAW INPUT
+        "s2_freq": "Monthly",       # SAVING RAW FREQ
         "split": 50,
-        "growth": 4.0, 
-        "hold": 10,
+        "growth": 4.0, "hold": 10,
         "living_expenses_json": json.dumps(DEFAULT_LIVING_EXPENSES_DATA),
-        "ext_mortgage": 2921.0,    
-        "ext_car_loan": 0.0,
-        "ext_cc": 0.0,
-        "ext_other": 0.0
+        "ext_mortgage": 2921.0, "ext_car_loan": 0.0, "ext_cc": 0.0, "ext_other": 0.0
     }
 
-# --- 2. LOAD PROPERTY FUNCTION (ENFORCING FLOATS) ---
+# --- 2. LOAD PROPERTY FUNCTION (ENFORCING FLOATS & RAW DATA) ---
 def load_property(row):
-    # 1. Update the 'Source of Truth' dictionary with history data
-    # We use .get() fallbacks to ensure old history rows don't crash the app
     st.session_state.form_data = {
         "prop_name": row["Property Name"],
         "prop_url": row["Listing URL"],
         "price": float(row["purchase_price"]),
-        "beds": int(row["beds"]),
-        "baths": int(row["baths"]),
-        "cars": int(row["cars"]),
-        "sal1": float(row.get("salary_1", 3850.0)),
-        "sal2": float(row.get("salary_2", 8500.0)),
+        "beds": int(row["beds"]), "baths": int(row["baths"]), "cars": int(row["cars"]),
+        "s1_input": float(row.get("s1_input", 3850.0)), # LOADING RAW INPUT
+        "s1_freq": row.get("s1_freq", "Fortnightly"),   # LOADING RAW FREQ
+        "s2_input": float(row.get("s2_input", 8500.0)),
+        "s2_freq": row.get("s2_freq", "Monthly"),
         "split": int(row.get("ownership_split", 0.5) * 100),
         "growth": float(row.get("growth_rate", 0.04) * 100),
         "hold": int(row.get("holding_period", 10)),
@@ -114,10 +113,6 @@ def load_property(row):
         "ext_other": float(row.get("ext_other", 0.0))
     }
 
-    # 2. CLEAR WIDGET STATE: This is the critical fix.
-    # We delete every key associated with a sidebar widget.
-    # When the app reruns, it will see no 'existing' values and 
-    # use the ones we just put in 'form_data' above.
     widget_keys = [
         "sb_prop_name", "sb_prop_url", "sb_price", "sb_beds", 
         "sb_baths", "sb_cars", "salary_input_1", "salary_input_2",
@@ -206,13 +201,14 @@ st.sidebar.subheader("Tax Profiles (Post-Tax)")
 col_s1_val, col_s1_freq = st.sidebar.columns([2, 1])
 s1_input = col_s1_val.number_input(
     "Inv 1 Take-Home ($)", 
-    value=float(st.session_state.form_data["sal1"]), # Pull from state
+    value=float(st.session_state.form_data["s1_input"]), # Pull RAW from state
     step=100.0,
     key="salary_input_1"
 )
 s1_freq = col_s1_freq.selectbox(
     "Freq", 
     ["Fortnightly", "Monthly", "Annually"], 
+    index=["Fortnightly", "Monthly", "Annually"].index(st.session_state.form_data["s1_freq"]), # Force state alignment
     key="s1_freq_selector"
 )
 
@@ -220,13 +216,14 @@ s1_freq = col_s1_freq.selectbox(
 col_s2_val, col_s2_freq = st.sidebar.columns([2, 1])
 s2_input = col_s2_val.number_input(
     "Inv 2 Take-Home ($)", 
-    value=float(st.session_state.form_data["sal2"]), # Pull from state
+    value=float(st.session_state.form_data["s2_input"]), # Pull RAW from state
     step=100.0,
     key="salary_input_2"
 )
 s2_freq = col_s2_freq.selectbox(
     "Freq", 
     ["Monthly", "Fortnightly", "Annually"], 
+    index=["Monthly", "Fortnightly", "Annually"].index(st.session_state.form_data["s2_freq"]), # Force state alignment
     key="s2_freq_selector"
 )
 
@@ -887,33 +884,60 @@ def generate_pdf(salary_1_annual, salary_2_annual, total_monthly_living, total_e
 
     return bytes(pdf.output())
 
-# --- DOWNLOAD BUTTON (BOTTOM OF SCRIPT) ---
-pdf_bytes = generate_pdf(
-    salary_1_annual, 
-    salary_2_annual, 
-    total_monthly_living, 
-    total_existing_debt_m
-)
+# --- STANDALONE SAVE BUTTON & DOWNLOAD BUTTON ---
+st.markdown("---")
 
-st.download_button(
-    label="⬇️ Download Full Summary PDF",
-    data=pdf_bytes,
-    file_name=f"{property_name.replace(' ', '_')}_Summary.pdf",
-    mime="application/pdf",
-    on_click=save_to_history,
-    args=(property_name, property_url, {
-        "purchase_price": purchase_price,
-        "beds": beds, "baths": baths, "cars": cars,
-        "salary_1": salary_1_annual, # Saves correctly for Revisit
-        "salary_2": salary_2_annual,
-        "ownership_split": ownership_split,
-        "growth_rate": growth_rate,
-        "holding_period": holding_period,
-        "living_expenses_json": st.session_state.form_data["living_expenses_json"],
-        # Ensuring these are saved to history.csv
-        "ext_mortgage": ext_mortgage,
-        "ext_car_loan": ext_car_loan,
-        "ext_cc": ext_cc,
-        "ext_other": ext_other
-    })
-)
+col_save, col_dl = st.columns(2)
+
+with col_save:
+    if st.button("💾 Save Property to History", use_container_width=True):
+        save_to_history(property_name, property_url, {
+            "purchase_price": purchase_price,
+            "beds": beds, "baths": baths, "cars": cars,
+            "s1_input": s1_input, # Save raw input to prevent double math
+            "s1_freq": s1_freq,   # Save raw freq
+            "s2_input": s2_input, 
+            "s2_freq": s2_freq,
+            "ownership_split": ownership_split,
+            "growth_rate": growth_rate,
+            "holding_period": holding_period,
+            "living_expenses_json": st.session_state.form_data["living_expenses_json"],
+            "ext_mortgage": ext_mortgage,
+            "ext_car_loan": ext_car_loan,
+            "ext_cc": ext_cc,
+            "ext_other": ext_other
+        })
+        st.success("✅ Saved to History!")
+
+with col_dl:
+    pdf_bytes = generate_pdf(
+        salary_1_annual, 
+        salary_2_annual, 
+        total_monthly_living, 
+        total_existing_debt_m
+    )
+
+    st.download_button(
+        label="⬇️ Download Full Summary PDF",
+        data=pdf_bytes,
+        file_name=f"{property_name.replace(' ', '_')}_Summary.pdf",
+        mime="application/pdf",
+        on_click=save_to_history,
+        use_container_width=True,
+        args=(property_name, property_url, {
+            "purchase_price": purchase_price,
+            "beds": beds, "baths": baths, "cars": cars,
+            "s1_input": s1_input, # Save raw input
+            "s1_freq": s1_freq,   # Save raw freq
+            "s2_input": s2_input,
+            "s2_freq": s2_freq,
+            "ownership_split": ownership_split,
+            "growth_rate": growth_rate,
+            "holding_period": holding_period,
+            "living_expenses_json": st.session_state.form_data["living_expenses_json"],
+            "ext_mortgage": ext_mortgage,
+            "ext_car_loan": ext_car_loan,
+            "ext_cc": ext_cc,
+            "ext_other": ext_other
+        })
+    )
