@@ -363,12 +363,13 @@ with tab3:
     st.subheader("2. Deposit Funding (Equity Release Loan)")
     st.info("💡 Interest on equity loans used to fund deposits/stamp duty is tax-deductible.")
     
-    use_equity = st.checkbox("Fund Deposit via Equity Release?", value=st.session_state.form_data["use_eq"])
+    # CRITICAL FIX: Using .get() prevents KeyErrors if old session state is stuck in memory
+    use_equity = st.checkbox("Fund Deposit via Equity Release?", value=st.session_state.form_data.get("use_eq", True))
     
     eq1, eq2 = st.columns(2)
     if use_equity:
-        eq_amount = eq1.number_input("Equity Loan Amount ($)", value=float(st.session_state.form_data["eq_amount"]), step=5000.0)
-        eq_rate = eq2.number_input("Equity Loan Rate (%)", value=float(st.session_state.form_data["eq_rate"]), step=0.01) / 100
+        eq_amount = eq1.number_input("Equity Loan Amount ($)", value=float(st.session_state.form_data.get("eq_amount", 170000.0)), step=5000.0)
+        eq_rate = eq2.number_input("Equity Loan Rate (%)", value=float(st.session_state.form_data.get("eq_rate", 6.20)), step=0.01) / 100
         
         # Equity loans are assumed 30-year P&I as per user notes
         eq_monthly_pi = abs(npf.pmt(eq_rate/12, 30*12, eq_amount))
