@@ -19,7 +19,6 @@ property_name = st.sidebar.text_input("Property Name/Address", value="2 Example 
 purchase_price = st.sidebar.number_input("Purchase Price ($)", value=650000, step=10000)
 
 st.sidebar.subheader("Tax Profiles (Joint Ownership)")
-# Splitting the incomes ensures the marginal tax rates are calculated correctly per person
 salary_1 = st.sidebar.number_input("Investor 1 Salary ($)", value=150000, step=5000)
 salary_2 = st.sidebar.number_input("Investor 2 Salary ($)", value=150000, step=5000)
 ownership_split = st.sidebar.slider("Ownership Split (Inv 1 %)", 0, 100, 50) / 100
@@ -53,21 +52,18 @@ with tab1:
     total_acquisition_costs = stamp_duty + legal_fees + building_pest + loan_setup + buyers_agent + other_entry
     total_cost_base = purchase_price + total_acquisition_costs
     
-    st.metric("Total Acquisition Costs", f"${total_acquisition_costs:,.0f}")
-    st.metric("Total Required (Property + Costs)", f"${total_cost_base:,.0f}")
+    st.metric("Total Acquisition Costs", f"${total_acquisition_costs:,.2f}")
+    st.metric("Total Required (Property + Costs)", f"${total_cost_base:,.2f}")
 
-# --- TAB 2: INCOME & EXPENSES (Monthly Inputs) ---
+# --- TAB 2: INCOME & EXPENSES ---
 with tab2:
     st.subheader("Cash Flow Essentials (Monthly Sourced)")
     c1, c2 = st.columns(2)
     
-    # Income (Monthly)
     monthly_rent = c1.number_input("Monthly Rent Received ($)", value=3683.33, step=100.0)
     vacancy_pct = c1.number_input("Vacancy Rate (%)", value=5.0, step=1.0)
-    
     annual_gross_income = (monthly_rent * 12) * (1 - (vacancy_pct / 100))
     
-    # Expenses (Monthly)
     mgt_fee_m = c2.number_input("Property Management (Monthly $)", value=276.25, step=10.0)
     strata_m = c2.number_input("Strata/Body Corporate (Monthly $)", value=500.00, step=10.0)
     insurance_m = c2.number_input("Landlord Insurance (Monthly $)", value=45.00, step=5.0)
@@ -84,29 +80,52 @@ with tab2:
     metric_col1.metric("Gross Annual Income", f"${annual_gross_income:,.2f}")
     metric_col2.metric("Total Annual Expenses", f"${total_operating_expenses:,.2f}")
 
-# --- TAB 3: LOAN DETAILS ---
+# --- TAB 3: LOAN DETAILS (UPDATED) ---
 with tab3:
     st.subheader("Financing Structure")
-    lvr_pct = st.slider("LVR (%)", 0, 100, 80) / 100
-    interest_rate = st.number_input("Interest Rate (%)", value=5.49, step=0.01) / 100
-    loan_term = st.number_input("Loan Term (Years)", value=30, step=1)
-    loan_type = st.selectbox("Repayment Type", ["Interest Only", "Principal & Interest"])
     
+    c1, c2 = st.columns(2)
+    lvr_pct = c1.slider("LVR (%)", 0, 100, 80) / 100
+    interest_rate = c2.number_input("Interest Rate (%)", value=5.49, step=0.01) / 100
+    loan_term = c1.number_input("Loan Term (Years)", value=30, step=1)
+    
+    # This determines which calculation drives the REST of the app
+    loan_type = c2.selectbox("Active Repayment Type (For Cash Flow)", ["Interest Only", "Principal & Interest"])
+    
+    # Calculate Loan Amount (Read-only)
     loan_amount = purchase_price * lvr_pct
     
+    # Perform BOTH calculations to show the comparison
+    monthly_io = (loan_amount * interest_rate) / 12
+    annual_io = loan_amount * interest_rate
+    
+    monthly_pi = abs(npf.pmt(interest_rate/12, loan_term*12, loan_amount))
+    annual_pi = monthly_pi * 12
+    
+    savings_io = annual_pi - annual_io
+    
+    # Set variables for the downstream tabs based on the active selection
     if loan_type == "Interest Only":
-        annual_interest = loan_amount * interest_rate
-        annual_repayment = annual_interest
+        annual_repayment = annual_io
+        annual_interest = annual_io
     else:
-        monthly_repayment = abs(npf.pmt(interest_rate/12, loan_term*12, loan_amount))
-        annual_repayment = monthly_repayment * 12
-        annual_interest = loan_amount * interest_rate 
+        annual_repayment = annual_pi
+        annual_interest = annual_io # Estimated Year 1 interest for tax purposes
         
     st.divider()
-    l_col1, l_col2, l_col3 = st.columns(3)
-    l_col1.metric("Loan Amount", f"${loan_amount:,.0f}")
-    l_col2.metric("Annual Interest (Tax Deductible)", f"${annual_interest:,.0f}")
-    l_col3.metric("Total Annual Repayment", f"${annual_repayment:,.0f}")
+    st.markdown(f"### Calculated Loan Amount: **${loan_amount:,.2f}**")
+    
+    col_pi, col_io = st.columns(2)
+    with col_pi:
+        st.markdown("#### Principal & Interest (P&I)")
+        st.write(f"**Monthly P&I Repayment:** ${monthly_pi:,.2f}")
+        st.write(f"**Annual Repayment:** ${annual_pi:,.2f}")
+        
+    with col_io:
+        st.markdown("#### Interest Only (IO)")
+        st.write(f"**Monthly I Repayment:** ${monthly_io:,.2f}")
+        st.write(f"**Annual Repayment:** ${annual_io:,.2f}")
+        st.markdown(f"**Total Savings of I only: <span style='color:green'>${savings_io:,.2f}</span>**", unsafe_allow_html=True)
 
 # --- TAB 4: DEPRECIATION ---
 with tab4:
@@ -114,9 +133,9 @@ with tab4:
     div_43 = st.number_input("Capital Works (Div 43) ($)", value=9000, step=500)
     div_40 = st.number_input("Plant & Equipment (Div 40) ($)", value=8500, step=500)
     total_depreciation = div_43 + div_40
-    st.metric("Total Annual Depreciation", f"${total_depreciation:,.0f}")
+    st.metric("Total Annual Depreciation", f"${total_depreciation:,.2f}")
 
-# --- TAB 5: TAX & NEGATIVE GEARING (Dual Salary Logic) ---
+# --- TAB 5: TAX & NEGATIVE GEARING ---
 with tab5:
     st.subheader("Household Tax Impact & Cash Flow")
     
@@ -127,20 +146,16 @@ with tab5:
         elif income <= 190000: return 31288 + (income - 135000) * 0.37
         else: return 51638 + (income - 190000) * 0.45
 
-    # Total Property Income/Loss
     total_tax_deductions = total_operating_expenses + annual_interest + total_depreciation
     net_property_taxable_income = annual_gross_income - total_tax_deductions
     
-    # Split the loss/gain based on ownership
     property_income_1 = net_property_taxable_income * ownership_split
     property_income_2 = net_property_taxable_income * (1 - ownership_split)
     
-    # Calculate Tax Variance for Investor 1
     base_tax_1 = calculate_tax(salary_1)
     new_tax_1 = calculate_tax(max(0, salary_1 + property_income_1))
     tax_variance_1 = base_tax_1 - new_tax_1
     
-    # Calculate Tax Variance for Investor 2
     base_tax_2 = calculate_tax(salary_2)
     new_tax_2 = calculate_tax(max(0, salary_2 + property_income_2))
     tax_variance_2 = base_tax_2 - new_tax_2
@@ -179,9 +194,7 @@ with tab6:
     }).set_index("Year")
     
     st.line_chart(df_chart)
-    
-    st.write("Detailed Breakdown")
-    st.dataframe(df_chart.style.format("${:,.0f}"))
+    st.dataframe(df_chart.style.format("${:,.2f}"))
 
 # --- TAB 7: CGT PROJECTION ---
 with tab7:
@@ -198,11 +211,11 @@ with tab7:
 
     st.divider()
     c_col1, c_col2 = st.columns(2)
-    c_col1.metric("Estimated Sale Price (Year 10)", f"${sale_price:,.0f}")
-    c_col1.metric("Gross Capital Gain", f"${capital_gain:,.0f}")
+    c_col1.metric("Estimated Sale Price (Year 10)", f"${sale_price:,.2f}")
+    c_col1.metric("Gross Capital Gain", f"${capital_gain:,.2f}")
     
-    c_col2.metric("Estimated CGT Payable", f"${cgt_payable:,.0f}")
-    c_col2.metric("Net Profit After Tax", f"${net_profit_on_sale:,.0f}")
+    c_col2.metric("Estimated CGT Payable", f"${cgt_payable:,.2f}")
+    c_col2.metric("Net Profit After Tax", f"${net_profit_on_sale:,.2f}")
 
 # --- PDF GENERATION LOGIC ---
 st.markdown("---")
@@ -267,7 +280,7 @@ def generate_pdf():
     pdf.section_header("2. Annual Cash Flow & Household Tax Impact")
     pdf.row("Gross Annual Income:", f"${annual_gross_income:,.0f}")
     pdf.row("Total Operating Expenses:", f"${total_operating_expenses:,.0f}")
-    pdf.row("Annual Debt Servicing:", f"${annual_repayment:,.0f}")
+    pdf.row(f"Annual Debt Servicing ({loan_type}):", f"${annual_repayment:,.0f}")
     pdf.row("Combined Tax Refund/Payable:", f"${total_tax_variance:,.0f}")
     pdf.row("Net Post-Tax Cash Flow:", f"${post_tax_cashflow:,.0f}")
     pdf.ln(5)
