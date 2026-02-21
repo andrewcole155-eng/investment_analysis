@@ -93,7 +93,8 @@ if "form_data" not in st.session_state:
 
 # --- 2. LOAD PROPERTY FUNCTION (ENFORCING FLOATS) ---
 def load_property(row):
-    # 1. Update the underlying data dictionary
+    # 1. Update the 'Source of Truth' dictionary with data from the CSV row
+    # We use .get() to provide fallback defaults if the CSV is an older version
     st.session_state.form_data = {
         "prop_name": row["Property Name"],
         "prop_url": row["Listing URL"],
@@ -103,29 +104,31 @@ def load_property(row):
         "cars": int(row["cars"]),
         "sal1": float(row.get("salary_1", 3850.0)),
         "sal2": float(row.get("salary_2", 8500.0)),
-        "split": int(row["ownership_split"] * 100),
-        "growth": float(row["growth_rate"] * 100),
-        "hold": int(row["holding_period"])
+        "split": int(row.get("ownership_split", 0.5) * 100),
+        "growth": float(row.get("growth_rate", 0.04) * 100),
+        "hold": int(row.get("holding_period", 10)),
+        "living_expenses_json": row.get("living_expenses_json", json.dumps(DEFAULT_LIVING_EXPENSES_DATA)),
+        "ext_mortgage": float(row.get("ext_mortgage", 2921.0)),
+        "ext_car_loan": float(row.get("ext_car_loan", 0.0)),
+        "ext_cc": float(row.get("ext_cc", 0.0)),
+        "ext_other": float(row.get("ext_other", 0.0))
     }
-    
-    # 2. Update the Widget Keys directly so the Sidebar refreshes visually
-    st.session_state.sb_prop_name = row["Property Name"]
-    st.session_state.sb_prop_url = row["Listing URL"]
-    st.session_state.sb_price = float(row["purchase_price"])
-    st.session_state.sb_beds = int(row["beds"])
-    st.session_state.sb_baths = int(row["baths"])
-    st.session_state.sb_cars = int(row["cars"])
 
-    # Load custom expenses
-    if "living_expenses_json" in row and pd.notna(row["living_expenses_json"]):
-        st.session_state.form_data["living_expenses_json"] = row["living_expenses_json"]
-    else:
-        st.session_state.form_data["living_expenses_json"] = json.dumps(DEFAULT_LIVING_EXPENSES_DATA)
-        
-    st.session_state.form_data["ext_mortgage"] = float(row.get("ext_mortgage", 0.0))
-    st.session_state.form_data["ext_car_loan"] = float(row.get("ext_car_loan", 0.0))
-    st.session_state.form_data["ext_cc"] = float(row.get("ext_cc", 0.0))
-    st.session_state.form_data["ext_other"] = float(row.get("ext_other", 0.0))
+    # 2. Clear the widget keys from session state memory.
+    # This prevents 'StreamlitAPIException' and forces the sidebar 
+    # to read the fresh values from the dictionary above.
+    widget_keys = [
+        "sb_prop_name", "sb_prop_url", "sb_price", "sb_beds", 
+        "sb_baths", "sb_cars", "salary_input_1", "salary_input_2",
+        "s1_freq_selector", "s2_freq_selector"
+    ]
+    
+    for key in widget_keys:
+        if key in st.session_state:
+            del st.session_state[key]
+            
+    # 3. CRITICAL: Restart the app logic immediately.
+    st.rerun()
 
 # --- GEMINI AI YIELD ESTIMATOR ---
 @st.cache_data(ttl=3600, show_spinner=False)
@@ -158,7 +161,6 @@ def fetch_market_yield(address, beds, baths, cars):
 # --- 1. GLOBAL INPUTS (SIDEBAR) ---
 st.sidebar.header("📍 Core Parameters")
 
-# Added unique 'key' arguments to ensure no duplication
 property_name = st.sidebar.text_input(
     "Property Name/Address", 
     value=st.session_state.form_data["prop_name"],
