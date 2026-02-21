@@ -4,6 +4,4 @@ numpy
 numpy-financial
 fpdf2
 matplotlib
-sqllite3
-datetime
 google-generativeai
