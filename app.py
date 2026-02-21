@@ -501,17 +501,17 @@ def generate_pdf():
             self.set_font("helvetica", "B", 20)
             self.set_text_color(0, 51, 102)
             self.cell(40) 
-            self.cell(0, 15, "Investment Portfolio Analysis", ln=True, align="L")
+            self.cell(0, 15, "Investment Portfolio Analysis", new_x="LMARGIN", new_y="NEXT", align="L")
             self.ln(10)
 
         def footer(self):
             # Position at 15 mm from bottom
             self.set_y(-15)
             self.set_font("helvetica", "I", 8)
-            self.set_text_color(150, 150, 150) # Light grey so it's unobtrusive
+            self.set_text_color(150, 150, 150)
             
             # AI Disclaimer
-            self.cell(0, 5, "*Disclaimer: The estimated suburb market yield is an AI-generated benchmark and should be independently verified.", align="C", ln=True)
+            self.cell(0, 5, "*Disclaimer: The estimated suburb market yield is an AI-generated benchmark and should be independently verified.", align="C", new_x="LMARGIN", new_y="NEXT")
             
             # Page Number
             self.cell(0, 5, f"Page {self.page_no()}", align="C")
@@ -520,7 +520,7 @@ def generate_pdf():
             self.set_font("helvetica", "B", 13)
             self.set_fill_color(230, 240, 255)
             self.set_text_color(0, 0, 0)
-            self.cell(0, 10, f"  {title}", ln=True, fill=True)
+            self.cell(0, 10, f"  {title}", fill=True, new_x="LMARGIN", new_y="NEXT")
             self.ln(2)
 
         def row(self, label, value, label2="", value2=""):
@@ -532,7 +532,7 @@ def generate_pdf():
                 self.set_font("helvetica", "", 10)
                 self.cell(50, 7, label2, border=0)
                 self.set_font("helvetica", "B", 10)
-                self.cell(0, 7, str(value2), ln=True, border=0)
+                self.cell(0, 7, str(value2), border=0, new_x="LMARGIN", new_y="NEXT")
             else:
                 self.ln(7)
 
@@ -541,14 +541,14 @@ def generate_pdf():
     
     # --- 1. PROPERTY HEADER ---
     pdf.set_font("helvetica", "B", 16)
-    pdf.cell(0, 8, property_name, ln=True)
+    pdf.cell(0, 8, property_name, new_x="LMARGIN", new_y="NEXT")
     pdf.set_font("helvetica", "", 11)
-    pdf.cell(0, 7, f"Configuration: {beds} Bed | {baths} Bath | {cars} Car", ln=True)
+    pdf.cell(0, 7, f"Configuration: {beds} Bed | {baths} Bath | {cars} Car", new_x="LMARGIN", new_y="NEXT")
     
     if property_url and property_url.strip() != "" and property_url != "https://www.realestate.com.au/":
         pdf.set_font("helvetica", "U", 9)
         pdf.set_text_color(0, 102, 204) 
-        pdf.cell(0, 6, "View Listing Online", ln=True, link=property_url)
+        pdf.cell(0, 6, "View Listing Online", link=property_url, new_x="LMARGIN", new_y="NEXT")
         pdf.set_text_color(0, 0, 0) 
     pdf.ln(3)
 
@@ -560,7 +560,7 @@ def generate_pdf():
     pdf.row("Total Entry Costs:", f"${total_acquisition_costs:,.0f}", "Total Cash Outlay:", f"${cash_outlay:,.0f}")
     pdf.ln(3)
 
-    # --- NEW: 3. YIELD ANALYSIS & MARKET COMPARISON ---
+    # --- 3. YIELD ANALYSIS & MARKET COMPARISON ---
     pdf.section_header("Yield Analysis & Market Comparison (AI Estimated)")
     pdf.row("Property Gross Yield:", f"{property_yield:.2f}%")
     
@@ -598,7 +598,7 @@ def generate_pdf():
     pdf.set_text_color(0, 0, 0)
     
     pdf.set_font("helvetica", "I", 10)
-    pdf.cell(0, 7, f"Net Weekly Household Impact: ${post_tax_cashflow/52:,.2f} per week", ln=True)
+    pdf.cell(0, 7, f"Net Weekly Household Impact: ${post_tax_cashflow/52:,.2f} per week", new_x="LMARGIN", new_y="NEXT")
     pdf.ln(3)
 
     # --- 6. EXIT STRATEGY & CGT (YEAR 10) ---
@@ -615,7 +615,7 @@ def generate_pdf():
     pdf.set_fill_color(240, 240, 240)
     pdf.cell(30, 7, "Year", border=1, align="C", fill=True)
     pdf.cell(80, 7, "Estimated Value", border=1, align="C", fill=True)
-    pdf.cell(80, 7, "Estimated Equity", border=1, align="C", ln=True, fill=True)
+    pdf.cell(80, 7, "Estimated Equity", border=1, align="C", fill=True, new_x="LMARGIN", new_y="NEXT")
     
     pdf.set_font("helvetica", "", 9)
     for yr in [1, 3, 5, 10]:
@@ -624,7 +624,7 @@ def generate_pdf():
             eq = val - loan_amount
             pdf.cell(30, 7, f"Year {yr}", border=1, align="C")
             pdf.cell(80, 7, f"${val:,.0f}", border=1, align="C")
-            pdf.cell(80, 7, f"${eq:,.0f}", border=1, align="C", ln=True)
+            pdf.cell(80, 7, f"${eq:,.0f}", border=1, align="C", new_x="LMARGIN", new_y="NEXT")
     pdf.ln(5)
 
     # --- 8. GROWTH CHART (Professional Formatting) ---
