@@ -93,20 +93,30 @@ if "form_data" not in st.session_state:
 
 # --- 2. LOAD PROPERTY FUNCTION (ENFORCING FLOATS) ---
 def load_property(row):
+    # 1. Update the underlying data dictionary
     st.session_state.form_data = {
         "prop_name": row["Property Name"],
         "prop_url": row["Listing URL"],
-        "price": float(row["purchase_price"]), # Force Float
+        "price": float(row["purchase_price"]),
         "beds": int(row["beds"]),
         "baths": int(row["baths"]),
         "cars": int(row["cars"]),
-        "sal1": float(row["salary_1"]),       # Force Float
-        "sal2": float(row["salary_2"]),       # Force Float
+        "sal1": float(row.get("salary_1", 3850.0)),
+        "sal2": float(row.get("salary_2", 8500.0)),
         "split": int(row["ownership_split"] * 100),
         "growth": float(row["growth_rate"] * 100),
         "hold": int(row["holding_period"])
     }
     
+    # 2. Update the Widget Keys directly so the Sidebar refreshes visually
+    st.session_state.sb_prop_name = row["Property Name"]
+    st.session_state.sb_prop_url = row["Listing URL"]
+    st.session_state.sb_price = float(row["purchase_price"])
+    st.session_state.sb_beds = int(row["beds"])
+    st.session_state.sb_baths = int(row["baths"])
+    st.session_state.sb_cars = int(row["cars"])
+
+    # Load custom expenses
     if "living_expenses_json" in row and pd.notna(row["living_expenses_json"]):
         st.session_state.form_data["living_expenses_json"] = row["living_expenses_json"]
     else:
@@ -116,20 +126,6 @@ def load_property(row):
     st.session_state.form_data["ext_car_loan"] = float(row.get("ext_car_loan", 0.0))
     st.session_state.form_data["ext_cc"] = float(row.get("ext_cc", 0.0))
     st.session_state.form_data["ext_other"] = float(row.get("ext_other", 0.0))
-
-# --- 3. SIDEBAR INPUTS (ENSURE VALUE TYPES MATCH STEP TYPES) ---
-st.sidebar.header("📍 Core Parameters")
-property_name = st.sidebar.text_input("Property Name/Address", value=st.session_state.form_data["prop_name"])
-property_url = st.sidebar.text_input("Property Listing URL", value=st.session_state.form_data["prop_url"])
-
-col_spec1, col_spec2, col_spec3 = st.sidebar.columns(3)
-# Keep beds/baths as Integers (Step=1, Value=Int)
-beds = col_spec1.number_input("Beds", value=int(st.session_state.form_data["beds"]), step=1)
-baths = col_spec2.number_input("Baths", value=int(st.session_state.form_data["baths"]), step=1)
-cars = col_spec3.number_input("Cars", value=int(st.session_state.form_data["cars"]), step=1)
-
-# Ensure Purchase Price is Float because step is 10000.0 (implied by typical usage)
-purchase_price = st.sidebar.number_input("Purchase Price ($)", value=float(st.session_state.form_data["price"]), step=10000.0)
 
 # --- GEMINI AI YIELD ESTIMATOR ---
 @st.cache_data(ttl=3600, show_spinner=False)
