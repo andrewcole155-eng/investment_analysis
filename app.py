@@ -93,7 +93,8 @@ if "form_data" not in st.session_state:
 
 # --- 2. LOAD PROPERTY FUNCTION (ENFORCING FLOATS) ---
 def load_property(row):
-    # 1. Update the 'Source of Truth' dictionary
+    # 1. Update the 'Source of Truth' dictionary with history data
+    # We use .get() fallbacks to ensure old history rows don't crash the app
     st.session_state.form_data = {
         "prop_name": row["Property Name"],
         "prop_url": row["Listing URL"],
@@ -113,18 +114,21 @@ def load_property(row):
         "ext_other": float(row.get("ext_other", 0.0))
     }
 
-    # 2. Clear widget keys to prevent 'StreamlitAPIException'
+    # 2. CLEAR WIDGET STATE: This is the critical fix.
+    # We delete every key associated with a sidebar widget.
+    # When the app reruns, it will see no 'existing' values and 
+    # use the ones we just put in 'form_data' above.
     widget_keys = [
         "sb_prop_name", "sb_prop_url", "sb_price", "sb_beds", 
         "sb_baths", "sb_cars", "salary_input_1", "salary_input_2",
-        "s1_freq_selector", "s2_freq_selector"
+        "s1_freq_selector", "s2_freq_selector",
+        "sb_ext_mortgage", "sb_ext_car_loan", "sb_ext_cc", "sb_ext_other" 
     ]
     
     for key in widget_keys:
         if key in st.session_state:
             del st.session_state[key]
             
-    # 3. Refresh the app to display loaded data
     st.rerun()
 
 # --- GEMINI AI YIELD ESTIMATOR ---
@@ -202,28 +206,28 @@ st.sidebar.subheader("Tax Profiles (Post-Tax)")
 col_s1_val, col_s1_freq = st.sidebar.columns([2, 1])
 s1_input = col_s1_val.number_input(
     "Inv 1 Take-Home ($)", 
-    value=float(st.session_state.form_data["sal1"]), 
+    value=float(st.session_state.form_data["sal1"]), # Pull from state
     step=100.0,
-    key="salary_input_1"  # Unique Key
+    key="salary_input_1"
 )
 s1_freq = col_s1_freq.selectbox(
     "Freq", 
     ["Fortnightly", "Monthly", "Annually"], 
-    key="s1_freq_selector" # Unique Key
+    key="s1_freq_selector"
 )
 
 # Investor 2
 col_s2_val, col_s2_freq = st.sidebar.columns([2, 1])
 s2_input = col_s2_val.number_input(
     "Inv 2 Take-Home ($)", 
-    value=float(st.session_state.form_data["sal2"]), 
+    value=float(st.session_state.form_data["sal2"]), # Pull from state
     step=100.0,
-    key="salary_input_2"  # Unique Key
+    key="salary_input_2"
 )
 s2_freq = col_s2_freq.selectbox(
     "Freq", 
     ["Monthly", "Fortnightly", "Annually"], 
-    key="s2_freq_selector" # Unique Key
+    key="s2_freq_selector"
 )
 
 # --- Mapping for annualization ---
@@ -585,7 +589,7 @@ with tab9:
         for index, row in history_df.iterrows():
             with st.container():
                 c1, c2, c3, c4 = st.columns([0.1, 0.4, 0.3, 0.2])
-                
+
                 # Favorite Toggle
                 is_fav = "⭐" if row.get("Favorite", False) else "☆"
                 if c1.button(is_fav, key=f"fav_{index}"):
@@ -595,10 +599,8 @@ with tab9:
                 
                 c2.write(f"**{row['Property Name']}**")
                 c3.write(f"📅 {row['Date of PDF']}")
-                
                 # Revisit Action
                 if c4.button("🔄 Revisit", key=f"rev_{index}"):
-                    # We use .get() here as a safety net in case older rows are missing parameters
                     load_property(row)
                     st.rerun()
                 st.divider()
@@ -641,18 +643,39 @@ with tab10:
     # --- NEW: EXISTING DEBT COMMITMENTS ---
     st.subheader("💳 Existing Debt Commitments (Monthly)")
     d1, d2, d3, d4 = st.columns(4)
-    
-    # Using float() here acts as a safety shield against data type errors
-    ext_mortgage = d1.number_input("Existing Mortgage(s) ($)", value=float(st.session_state.form_data["ext_mortgage"]), step=100.0)
-    ext_car_loan = d2.number_input("Car Loan(s) ($)", value=float(st.session_state.form_data["ext_car_loan"]), step=50.0)
-    ext_cc = d3.number_input("Credit Card Payments ($)", value=float(st.session_state.form_data["ext_cc"]), step=50.0, help="Typically assessed at 3-4% of total limit")
-    ext_other = d4.number_input("Other Loans ($)", value=float(st.session_state.form_data["ext_other"]), step=50.0)
+
+    # We pull these directly from the session state 'Source of Truth'
+    ext_mortgage = d1.number_input(
+        "Existing Mortgage(s) ($)", 
+        value=float(st.session_state.form_data.get("ext_mortgage", 0.0)), 
+        step=100.0,
+        key="sb_ext_mortgage" # Added a specific key
+    )
+    ext_car_loan = d2.number_input(
+        "Car Loan(s) ($)", 
+        value=float(st.session_state.form_data.get("ext_car_loan", 0.0)), 
+        step=50.0,
+        key="sb_ext_car_loan"
+    )
+    ext_cc = d3.number_input(
+        "Credit Card Payments ($)", 
+        value=float(st.session_state.form_data.get("ext_cc", 0.0)), 
+        step=50.0, 
+        help="Typically assessed at 3-4% of total limit",
+        key="sb_ext_cc"
+    )
+    ext_other = d4.number_input(
+        "Other Loans ($)", 
+        value=float(st.session_state.form_data.get("ext_other", 0.0)), 
+        step=50.0,
+        key="sb_ext_other"
+    )
     
     total_existing_debt_m = ext_mortgage + ext_car_loan + ext_cc + ext_other
     
     st.divider()
     
-# --- NEW: SERVICING OVERVIEW ---
+    # --- NEW: SERVICING OVERVIEW ---
     st.subheader("⚖️ Monthly Serviceability Overview")
     
     # Inflows: Net inputs combined and divided into months
@@ -864,14 +887,7 @@ def generate_pdf(salary_1_annual, salary_2_annual, total_monthly_living, total_e
 
     return bytes(pdf.output())
 
-# --- DOWNLOAD BUTTON ---
-pdf_bytes = generate_pdf(
-    salary_1_annual, 
-    salary_2_annual, 
-    total_monthly_living, 
-    total_existing_debt_m
-)
-
+# --- DOWNLOAD BUTTON (BOTTOM OF SCRIPT) ---
 st.download_button(
     label="⬇️ Download Full Summary PDF",
     data=pdf_bytes,
@@ -887,9 +903,10 @@ st.download_button(
         "growth_rate": growth_rate,
         "holding_period": holding_period,
         "living_expenses_json": st.session_state.form_data["living_expenses_json"],
-        "ext_mortgage": float(st.session_state.form_data.get("ext_mortgage", 0.0)),
-        "ext_car_loan": float(st.session_state.form_data.get("ext_car_loan", 0.0)),
-        "ext_cc": float(st.session_state.form_data.get("ext_cc", 0.0)),
-        "ext_other": float(st.session_state.form_data.get("ext_other", 0.0))
+        # CRITICAL: Add these so they save to the CSV
+        "ext_mortgage": ext_mortgage,
+        "ext_car_loan": ext_car_loan,
+        "ext_cc": ext_cc,
+        "ext_other": ext_other
     })
 )
