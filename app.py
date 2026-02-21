@@ -268,6 +268,21 @@ tab0, tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10 = st.tabs([
     "Living Expenses"  # NEW TAB
 ])
 
+# --- PRE-CALCULATE HOUSEHOLD OBLIGATIONS FOR ALL TABS ---
+# 1. Living Expenses Calculation
+current_expenses_raw = st.session_state.form_data.get("living_expenses_json", json.dumps(DEFAULT_LIVING_EXPENSES_DATA))
+expenses_df = pd.DataFrame(json.loads(current_expenses_raw))
+total_monthly_living = expenses_df["Monthly Amount ($)"].sum()
+
+# 2. Existing Debt Calculation
+# We pull these directly from session state so they are available globally
+total_existing_debt_m = (
+    float(st.session_state.form_data.get("ext_mortgage", 2921.0)) +
+    float(st.session_state.form_data.get("ext_car_loan", 0.0)) +
+    float(st.session_state.form_data.get("ext_cc", 0.0)) +
+    float(st.session_state.form_data.get("ext_other", 0.0))
+)
+
 # --- TAB 1: ACQUISITION ---
 with tab1:
     st.subheader("Initial Outlay")
@@ -435,7 +450,7 @@ with tab6:
 
     st.divider()
 
-    # 2. NEW: COMPREHENSIVE SERVICEABILITY CHECK
+    # 2. COMPREHENSIVE SERVICEABILITY CHECK
     st.subheader("🏦 Household Serviceability Check")
     st.markdown("This section evaluates if the household can support this loan after factoring in all living expenses and existing debts.")
 
@@ -444,7 +459,6 @@ with tab6:
     shaded_rent_m = (annual_gross_income / 12) * 0.80
     total_net_salary_m = (salary_1 + salary_2) / 12
     
-    # Total Outflows (Living Expenses + Existing Debts + New Mortgage)
     # Lenders often assess serviceability at the P&I rate even for IO loans
     assessment_mortgage_m = monthly_pi 
     
