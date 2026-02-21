@@ -829,6 +829,7 @@ def generate_pdf(salary_1_annual, salary_2_annual, total_monthly_living, total_e
     pdf.ln(3)
 
     # --- 6. PROJECTED WEALTH MILESTONES ---
+    pdf.add_page()
     pdf.section_header("6. Projected Wealth Milestones")
     pdf.set_font("helvetica", "B", 9)
     pdf.set_fill_color(240, 240, 240)
