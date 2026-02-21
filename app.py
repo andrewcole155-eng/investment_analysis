@@ -171,16 +171,45 @@ def fetch_market_yield(address, beds, baths, cars):
 
 # --- 1. GLOBAL INPUTS (SIDEBAR) ---
 st.sidebar.header("📍 Core Parameters")
-# We use the session_state values as the 'value' for each input
-property_name = st.sidebar.text_input("Property Name/Address", value=st.session_state.form_data["prop_name"])
-property_url = st.sidebar.text_input("Property Listing URL", value=st.session_state.form_data["prop_url"])
+
+# Added unique 'key' arguments to ensure no duplication
+property_name = st.sidebar.text_input(
+    "Property Name/Address", 
+    value=st.session_state.form_data["prop_name"],
+    key="sb_prop_name"
+)
+property_url = st.sidebar.text_input(
+    "Property Listing URL", 
+    value=st.session_state.form_data["prop_url"],
+    key="sb_prop_url"
+)
 
 col_spec1, col_spec2, col_spec3 = st.sidebar.columns(3)
-beds = col_spec1.number_input("Beds", value=st.session_state.form_data["beds"], step=1)
-baths = col_spec2.number_input("Baths", value=st.session_state.form_data["baths"], step=1)
-cars = col_spec3.number_input("Cars", value=st.session_state.form_data["cars"], step=1)
+beds = col_spec1.number_input(
+    "Beds", 
+    value=int(st.session_state.form_data["beds"]), 
+    step=1,
+    key="sb_beds"
+)
+baths = col_spec2.number_input(
+    "Baths", 
+    value=int(st.session_state.form_data["baths"]), 
+    step=1,
+    key="sb_baths"
+)
+cars = col_spec3.number_input(
+    "Cars", 
+    value=int(st.session_state.form_data["cars"]), 
+    step=1,
+    key="sb_cars"
+)
 
-purchase_price = st.sidebar.number_input("Purchase Price ($)", value=st.session_state.form_data["price"], step=10000)
+purchase_price = st.sidebar.number_input(
+    "Purchase Price ($)", 
+    value=float(st.session_state.form_data["price"]), 
+    step=10000.0,
+    key="sb_price"
+)
 
 st.sidebar.subheader("Tax Profiles (Post-Tax)")
 
