@@ -392,7 +392,7 @@ with tab5:
     total_depreciation = div_43 + div_40
     st.metric("Total Annual Depreciation", f"${total_depreciation:,.2f}")
 
-# --- TAB 6: TAX & NEGATIVE GEARING ---
+# --- TAB 6: TAX, GEARING & SERVICEABILITY ---
 with tab6:
     st.subheader("Household Tax Impact & Cash Flow")
     st.info("💡 **Note:** Negative Gearing benefits are estimated based on your Take-Home pay figures. To calculate these, the app treats your inputs as the base taxable income.")
@@ -404,6 +404,7 @@ with tab6:
         elif income <= 190000: return 31288 + (income - 135000) * 0.37
         else: return 51638 + (income - 190000) * 0.45
 
+    # 1. Tax & Gearing Calculations
     total_tax_deductions = total_operating_expenses + annual_interest + total_depreciation
     net_property_taxable_income = annual_gross_income - total_tax_deductions
     
@@ -421,6 +422,7 @@ with tab6:
     total_tax_variance = tax_variance_1 + tax_variance_2
     post_tax_cashflow = pre_tax_cashflow + total_tax_variance
 
+    # Display Tax Metrics
     t_col1, t_col2 = st.columns(2)
     t_col1.metric("Pre-Tax Cash Flow (Annual)", f"${pre_tax_cashflow:,.2f}")
     
@@ -430,6 +432,49 @@ with tab6:
         t_col2.metric("Combined Estimated Tax Payable", f"${abs(total_tax_variance):,.2f}")
         
     st.metric("Household Net Post-Tax Cash Flow (Annual)", f"${post_tax_cashflow:,.2f}")
+
+    st.divider()
+
+    # 2. NEW: COMPREHENSIVE SERVICEABILITY CHECK
+    st.subheader("🏦 Household Serviceability Check")
+    st.markdown("This section evaluates if the household can support this loan after factoring in all living expenses and existing debts.")
+
+    # Calculate Monthly Figures
+    # Banks usually shade rental income by 20% to account for vacancies/costs
+    shaded_rent_m = (annual_gross_income / 12) * 0.80
+    total_net_salary_m = (salary_1 + salary_2) / 12
+    
+    # Total Outflows (Living Expenses + Existing Debts + New Mortgage)
+    # Lenders often assess serviceability at the P&I rate even for IO loans
+    assessment_mortgage_m = monthly_pi 
+    
+    total_monthly_inflow = total_net_salary_m + shaded_rent_m
+    total_monthly_outflow = total_monthly_living + total_existing_debt_m + assessment_mortgage_m
+    
+    monthly_surplus = total_monthly_inflow - total_monthly_outflow
+    
+    # Display Serviceability Dashboard
+    srv_col1, srv_col2 = st.columns(2)
+    
+    with srv_col1:
+        st.write("**Monthly Inflows**")
+        st.write(f"Total Net Salaries: `${total_net_salary_m:,.2f}`")
+        st.write(f"Shaded Rental Income (80%): `${shaded_rent_m:,.2f}`")
+        st.markdown(f"**Total Inflow: ${total_monthly_inflow:,.2f}**")
+
+    with srv_col2:
+        st.write("**Monthly Outflows**")
+        st.write(f"Living Expenses: `${total_monthly_living:,.2f}`")
+        st.write(f"Existing Debts: `${total_existing_debt_m:,.2f}`")
+        st.write(f"New Loan (P&I Assessment): `${assessment_mortgage_m:,.2f}`")
+        st.markdown(f"**Total Outflow: ${total_monthly_outflow:,.2f}**")
+
+    st.divider()
+
+    if monthly_surplus > 0:
+        st.success(f"### ✅ Serviceable\nYour household has an estimated monthly surplus of **${monthly_surplus:,.2f}**.")
+    else:
+        st.error(f"### ⚠️ Serviceability Warning\nYour household has an estimated monthly deficit of **${abs(monthly_surplus):,.2f}**. This loan may be difficult to service under current bank assessment criteria.")
 
 # --- TAB 7: 10-YEAR PROJECTIONS ---
 with tab7:
@@ -729,18 +774,44 @@ def generate_pdf():
     pdf.row("Investor 2 Salary:", f"${salary_2:,.0f}", "Annual Depreciation:", f"${total_depreciation:,.0f}")
     pdf.ln(3)
 
-    # --- 5. CASH FLOW & GEARING ---
-    pdf.section_header("Cash Flow & Negative Gearing Impact")
+    # --- 5. CASH FLOW & SERVICEABILITY ANALYSIS ---
+    pdf.section_header("Cash Flow & Household Serviceability")
+    
+    # Property Specifics
     pdf.row("Annual Rent:", f"${annual_gross_income:,.0f}", "Operating Expenses:", f"-${total_operating_expenses:,.0f}")
-    pdf.row("Loan Interest:", f"-${annual_interest:,.0f}", "Pre-Tax Cash Flow:", f"${pre_tax_cashflow:,.0f}")
+    pdf.row("Loan Interest:", f"-${annual_interest:,.0f}", "Pre-Tax Property CF:", f"${pre_tax_cashflow:,.2f}")
+    pdf.ln(2)
+
+    # Household Serviceability (The New Part)
+    total_household_net_m = (salary_1_annual + salary_2_annual) / 12
+    total_living_expenses_m = total_monthly_living
+    total_debt_commitments_m = total_existing_debt_m
     
+    # Calculate Monthly Surplus
+    new_mortgage_m = monthly_io if loan_type == "Interest Only" else monthly_pi
+    monthly_inflow = total_household_net_m + (monthly_rent * 0.8) # 80% rent shading
+    monthly_outflow = total_living_expenses_m + total_debt_commitments_m + new_mortgage_m
+    net_monthly_surplus = monthly_inflow - monthly_outflow
+
     pdf.set_font("helvetica", "B", 10)
-    pdf.set_text_color(0, 128, 0) if total_tax_variance > 0 else pdf.set_text_color(200, 0, 0)
-    pdf.row("Est. Tax Refund/Benefit:", f"${total_tax_variance:,.0f}", "Post-Tax Cash Flow:", f"${post_tax_cashflow:,.0f}")
-    pdf.set_text_color(0, 0, 0)
+    pdf.cell(0, 7, "Monthly Serviceability Breakdown:", new_x="LMARGIN", new_y="NEXT")
+    pdf.set_font("helvetica", "", 10)
     
-    pdf.set_font("helvetica", "I", 10)
-    pdf.cell(0, 7, f"Net Weekly Household Impact: ${post_tax_cashflow/52:,.2f} per week", new_x="LMARGIN", new_y="NEXT")
+    pdf.row("Net Household Income:", f"${total_household_net_m:,.2f}", "Existing Debts:", f"-${total_debt_commitments_m:,.2f}")
+    pdf.row("Shaded Rental Income:", f"${(monthly_rent * 0.8):,.2f}", "Living Expenses:", f"-${total_living_expenses_m:,.2f}")
+    pdf.row("New Loan Repayment:", f"-${new_mortgage_m:,.2f}")
+    
+    # Final Surplus Highlight
+    if net_monthly_surplus >= 0:
+        pdf.set_text_color(0, 128, 0)
+        pdf.set_font("helvetica", "B", 11)
+        pdf.cell(0, 10, f"ESTIMATED MONTHLY SURPLUS: ${net_monthly_surplus:,.2f}", align="R", new_x="LMARGIN", new_y="NEXT")
+    else:
+        pdf.set_text_color(200, 0, 0)
+        pdf.set_font("helvetica", "B", 11)
+        pdf.cell(0, 10, f"ESTIMATED MONTHLY DEFICIT: ${abs(net_monthly_surplus):,.2f}", align="R", new_x="LMARGIN", new_y="NEXT")
+    
+    pdf.set_text_color(0, 0, 0) # Reset color
     pdf.ln(3)
 
     # --- 6. EXIT STRATEGY & CGT (YEAR 10) ---
