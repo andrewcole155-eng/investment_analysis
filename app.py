@@ -82,9 +82,9 @@ if "form_data" not in st.session_state:
         "prop_url": "https://www.realestate.com.au/",
         "price": 650000.0,
         "beds": 2, "baths": 1, "cars": 1,
-        "s1_input": 3850.0,         # SAVING RAW INPUT
+        "s1_input": 3811.78,         # SAVING RAW INPUT
         "s1_freq": "Fortnightly",   # SAVING RAW FREQ
-        "s2_input": 8500.0,         # SAVING RAW INPUT
+        "s2_input": 8429.83,         # SAVING RAW INPUT
         "s2_freq": "Monthly",       # SAVING RAW FREQ
         "split": 50,
         "growth": 4.0, "hold": 10,
@@ -102,9 +102,9 @@ def load_property(row):
         "beds": int(row["beds"]),
         "baths": int(row["baths"]),
         "cars": int(row["cars"]),
-        "s1_input": float(row.get("s1_input", 3850.0)),
+        "s1_input": float(row.get("s1_input", 3811.78)),
         "s1_freq": row.get("s1_freq", "Fortnightly"),
-        "s2_input": float(row.get("s2_input", 8500.0)),
+        "s2_input": float(row.get("s2_input", 8429.83)),
         "s2_freq": row.get("s2_freq", "Monthly"),
         "split": int(row.get("ownership_split", 0.5) * 100),
         "growth": float(row.get("growth_rate", 0.04) * 100),
@@ -718,19 +718,20 @@ with tab10:
     else:
         st.error(f"Warning: Estimated household deficit of **${abs(monthly_surplus):,.2f} per month**.")
 
-# --- PDF GENERATION LOGIC ---
+# ==========================================================
+# --- EXPORT & SAVE SECTION (BOTTOM OF SCRIPT) ---
+# ==========================================================
 st.markdown("---")
 
 def generate_pdf(salary_1_annual, salary_2_annual, total_monthly_living, total_existing_debt_m):
-    # 1. Fetch AI Market Yield Data
+    # Fetch AI Market Yield Data
     market_yield = fetch_market_yield(property_name, beds, baths, cars)
     property_yield = (annual_gross_income / purchase_price) * 100
 
     class InvestmentReportPDF(FPDF):
         def header(self):
             logo_path = "AQI_Logo.png" 
-            if os.path.exists(logo_path):
-                self.image(logo_path, 10, 8, 30)
+            if os.path.exists(logo_path): self.image(logo_path, 10, 8, 30)
             self.set_font("helvetica", "B", 20)
             self.set_text_color(0, 51, 102)
             self.cell(40) 
@@ -761,8 +762,7 @@ def generate_pdf(salary_1_annual, salary_2_annual, total_monthly_living, total_e
                 self.cell(50, 7, label2, border=0)
                 self.set_font("helvetica", "B", 10)
                 self.cell(0, 7, str(value2), border=0, new_x="LMARGIN", new_y="NEXT")
-            else:
-                self.ln(7)
+            else: self.ln(7)
 
     pdf = InvestmentReportPDF()
     pdf.add_page()
@@ -773,8 +773,7 @@ def generate_pdf(salary_1_annual, salary_2_annual, total_monthly_living, total_e
     pdf.set_font("helvetica", "", 11)
     pdf.cell(0, 7, f"Configuration: {beds} Bed | {baths} Bath | {cars} Car", new_x="LMARGIN", new_y="NEXT")
     if property_url and property_url.strip() != "" and property_url != "https://www.realestate.com.au/":
-        pdf.set_font("helvetica", "U", 9)
-        pdf.set_text_color(0, 102, 204) 
+        pdf.set_font("helvetica", "U", 9); pdf.set_text_color(0, 102, 204) 
         pdf.cell(0, 6, "View Listing Online", link=property_url, new_x="LMARGIN", new_y="NEXT")
         pdf.set_text_color(0, 0, 0) 
     pdf.ln(3)
@@ -782,97 +781,111 @@ def generate_pdf(salary_1_annual, salary_2_annual, total_monthly_living, total_e
     # --- 1. ACQUISITION & FINANCE ---
     cash_outlay = total_cost_base - loan_amount
     pdf.section_header("1. Acquisition & Finance")
-    pdf.row("Purchase Price:", f"${purchase_price:,.0f}", "Loan Amount:", f"${loan_amount:,.0f}")
+    # Added LVR Transparency
+    pdf.row("Purchase Price:", f"${purchase_price:,.0f}", "Loan Amount:", f"${loan_amount:,.0f} ({lvr_pct*100:.0f}% LVR)")
     pdf.row("Interest Rate:", f"{interest_rate*100:.2f}%", "Loan Type:", f"{loan_type}")
     pdf.row("Total Entry Costs:", f"${total_acquisition_costs:,.0f}", "Total Cash Outlay:", f"${cash_outlay:,.0f}")
     pdf.ln(3)
 
     # --- 2. YIELD ANALYSIS & MARKET COMPARISON ---
     pdf.section_header("2. Yield Analysis & Market Comparison (AI Estimated)")
-    pdf.row("Property Gross Yield:", f"{property_yield:.2f}%")
+    # Added Net Rental Yield
+    net_yield = ((annual_gross_income - total_operating_expenses) / purchase_price) * 100
+    pdf.row("Property Gross Yield:", f"{property_yield:.2f}%", "Property Net Yield:", f"{net_yield:.2f}%")
     if market_yield:
         variance = property_yield - market_yield
         pdf.set_text_color(0, 128, 0) if variance >= 0 else pdf.set_text_color(200, 0, 0)
         status = f"{'Outperforming' if variance >= 0 else 'Underperforming'} by {abs(variance):.2f}%"
         pdf.row("Est. Suburb Average:", f"{market_yield:.2f}%", "Market Status:", status)
     else:
-        pdf.set_text_color(128, 128, 128)
-        pdf.row("Est. Suburb Average:", "Data Unavailable", "Market Status:", "N/A")
-    pdf.set_text_color(0, 0, 0)
-    pdf.ln(3)
+        pdf.set_text_color(128, 128, 128); pdf.row("Est. Suburb Average:", "Data Unavailable", "Market Status:", "N/A")
+    pdf.set_text_color(0, 0, 0); pdf.ln(3)
 
     # --- 3. PROPERTY PERFORMANCE (ANNUAL PRE-TAX) ---
     pdf.section_header("3. Property Performance (Annual Pre-Tax)")
-    pdf.row("Gross Annual Rent:", f"${annual_gross_income:,.0f}", "Operating Expenses:", f"-${total_operating_expenses:,.0f}")
-    pdf.row("Loan Interest Expense:", f"-${annual_interest:,.0f}", "Net Property Cash Flow:", f"${pre_tax_cashflow:,.2f}")
-    pdf.set_font("helvetica", "I", 10)
-    pdf.set_text_color(0, 102, 204)
-    pdf.cell(0, 7, f"Est. Additional Annual Tax Refund (Gearing): ${total_tax_variance:,.2f}", new_x="LMARGIN", new_y="NEXT")
-    pdf.set_text_color(0, 0, 0)
-    pdf.ln(3)
-
-    # --- 4. MONTHLY HOUSEHOLD SERVICEABILITY (CONSOLIDATED MATH) ---
-    pdf.section_header("4. Monthly Household Serviceability")
     
-    # Monthly conversions
+    # Added Cash-on-Cash Return & Vacancy Assumption
+    cash_on_cash = (pre_tax_cashflow / cash_outlay) * 100 if cash_outlay > 0 else 0
+    pdf.row(f"Gross Rent ({vacancy_pct:.1f}% Vac):", f"${annual_gross_income:,.0f}", "Operating Expenses:", f"-${total_operating_expenses:,.0f}")
+    
+    # Added High-Level Expense Breakdown
+    pdf.set_font("helvetica", "I", 8)
+    pdf.set_text_color(120, 120, 120)
+    pdf.cell(95, 4, "", border=0) # offset alignment
+    pdf.cell(0, 4, f"(Strata: ${strata_m*12:,.0f} | Mgt: ${mgt_fee_m*12:,.0f} | Other: ${(rates_m+water_m+insurance_m+maint_m+other_m)*12:,.0f})", border=0, new_x="LMARGIN", new_y="NEXT")
+    pdf.set_text_color(0, 0, 0)
+    pdf.ln(1)
+    
+    pdf.row("Loan Interest Expense:", f"-${annual_interest:,.0f}", "Net Property Cash Flow:", f"${pre_tax_cashflow:,.2f}")
+    
+    # Custom color alignment to match the old style
+    pdf.set_font("helvetica", "I", 10); pdf.set_text_color(0, 102, 204)
+    pdf.cell(50, 7, "Cash-on-Cash Return:", border=0)
+    pdf.set_font("helvetica", "B", 10)
+    pdf.cell(45, 7, f"{cash_on_cash:.2f}%", border=0)
+    pdf.set_font("helvetica", "I", 10)
+    pdf.cell(50, 7, "Est. Additional Tax Refund:", border=0)
+    pdf.set_font("helvetica", "B", 10)
+    pdf.cell(0, 7, f"${total_tax_variance:,.2f}", border=0, new_x="LMARGIN", new_y="NEXT")
+    pdf.set_text_color(0, 0, 0); pdf.ln(3)
+
+    # --- 4. MONTHLY HOUSEHOLD SERVICEABILITY ---
+    pdf.section_header("4. Monthly Household Serviceability")
     total_household_net_m = (salary_1_annual + salary_2_annual) / 12
     shaded_rent_m = (monthly_rent * 0.80) 
     new_mortgage_m = monthly_io if loan_type == "Interest Only" else monthly_pi
-    
-    # CRITICAL FIX: Including Monthly Operating Expenses from Section 3
     prop_expenses_m = total_operating_expenses / 12
-    
-    monthly_inflow = total_household_net_m + shaded_rent_m
-    monthly_outflow = total_monthly_living + total_existing_debt_m + new_mortgage_m + prop_expenses_m
-    net_monthly_surplus = monthly_inflow - monthly_outflow
+    net_monthly_surplus = (total_household_net_m + shaded_rent_m) - (total_monthly_living + total_existing_debt_m + new_mortgage_m + prop_expenses_m)
 
-    pdf.set_font("helvetica", "B", 10)
-    pdf.cell(0, 7, "Serviceability Breakdown (Monthly):", new_x="LMARGIN", new_y="NEXT")
+    pdf.set_font("helvetica", "B", 10); pdf.cell(0, 7, "Serviceability Breakdown (Monthly):", new_x="LMARGIN", new_y="NEXT")
     pdf.set_font("helvetica", "", 10)
-    
     pdf.row("Take-Home Pay:", f"${total_household_net_m:,.2f}", "Living Expenses:", f"-${total_monthly_living:,.2f}")
     pdf.row("Rental Income (80%):", f"${shaded_rent_m:,.2f}", "Existing Debts:", f"-${total_existing_debt_m:,.2f}")
     pdf.row("New Property Loan:", f"-${new_mortgage_m:,.2f}", "Prop. Operating Exp:", f"-${prop_expenses_m:,.2f}")
     
+    # Calculate Serviceability Stress Test (+3% APRA Buffer on P&I)
+    stress_rate = interest_rate + 0.03
+    stress_pi = abs(npf.pmt(stress_rate/12, loan_term*12, loan_amount))
+    stress_surplus = (total_household_net_m + shaded_rent_m) - (total_monthly_living + total_existing_debt_m + stress_pi + prop_expenses_m)
+    
+    # Calculate New Loan DTI (against Net Income)
+    dti = loan_amount / (salary_1_annual + salary_2_annual) if (salary_1_annual + salary_2_annual) > 0 else 0
+
     pdf.ln(2)
     if net_monthly_surplus >= 0:
-        pdf.set_text_color(0, 128, 0)
-        pdf.set_font("helvetica", "B", 12)
-        pdf.cell(0, 10, f"ESTIMATED MONTHLY SURPLUS: ${net_monthly_surplus:,.2f}", align="R", new_x="LMARGIN", new_y="NEXT")
+        pdf.set_text_color(0, 128, 0); pdf.set_font("helvetica", "B", 12)
+        pdf.cell(0, 8, f"ESTIMATED MONTHLY SURPLUS: ${net_monthly_surplus:,.2f}", align="R", new_x="LMARGIN", new_y="NEXT")
     else:
-        pdf.set_text_color(200, 0, 0)
-        pdf.set_font("helvetica", "B", 12)
-        pdf.cell(0, 10, f"ESTIMATED MONTHLY DEFICIT: ${abs(net_monthly_surplus):,.2f}", align="R", new_x="LMARGIN", new_y="NEXT")
-    pdf.set_text_color(0, 0, 0)
-    pdf.ln(5)
+        pdf.set_text_color(200, 0, 0); pdf.set_font("helvetica", "B", 12)
+        pdf.cell(0, 8, f"ESTIMATED MONTHLY DEFICIT: ${abs(net_monthly_surplus):,.2f}", align="R", new_x="LMARGIN", new_y="NEXT")
+    
+    # Inject Stress Test & DTI Ratio
+    pdf.set_text_color(100, 100, 100)
+    pdf.set_font("helvetica", "I", 9)
+    pdf.cell(0, 5, f"New Loan to Net Income (DTI): {dti:.1f}x   |   Bank Stress Test (+3% P&I): ${stress_surplus:,.2f} Surplus/Deficit", align="R", new_x="LMARGIN", new_y="NEXT")
+    
+    pdf.set_text_color(0, 0, 0); pdf.ln(3)
 
-    # --- 5. EXIT STRATEGY & CGT PROJECTION ---
+    # --- 5. EXIT STRATEGY & CGT ---
     pdf.section_header(f"5. Exit Strategy & CGT Projection (Year {holding_period})")
     pdf.row("Est. Sale Price:", f"${future_values[-1]:,.0f}", "Gross Capital Gain:", f"${capital_gain:,.0f}")
     pdf.row("Marginal Tax Rate:", f"{est_marginal_rate*100:.1f}%", "Est. CGT Payable:", f"${cgt_payable:,.0f}")
-    pdf.set_font("helvetica", "B", 10)
-    pdf.row("NET PROFIT ON SALE:", f"${net_profit_on_sale:,.0f}")
+    pdf.set_font("helvetica", "B", 10); pdf.row("NET PROFIT ON SALE:", f"${net_profit_on_sale:,.0f}")
     pdf.ln(3)
 
-    # --- 6. PROJECTED WEALTH MILESTONES ---
+    # --- 6. WEALTH MILESTONES & CHARTS ---
     pdf.add_page()
     pdf.section_header("6. Projected Wealth Milestones")
-    pdf.set_font("helvetica", "B", 9)
-    pdf.set_fill_color(240, 240, 240)
-    pdf.cell(30, 7, "Year", border=1, align="C", fill=True)
-    pdf.cell(80, 7, "Estimated Value", border=1, align="C", fill=True)
-    pdf.cell(80, 7, "Estimated Equity", border=1, align="C", fill=True, new_x="LMARGIN", new_y="NEXT")
-    
+    pdf.set_font("helvetica", "B", 9); pdf.set_fill_color(240, 240, 240)
+    pdf.cell(30, 7, "Year", border=1, align="C", fill=True); pdf.cell(80, 7, "Estimated Value", border=1, align="C", fill=True); pdf.cell(80, 7, "Estimated Equity", border=1, align="C", fill=True, new_x="LMARGIN", new_y="NEXT")
     pdf.set_font("helvetica", "", 9)
     for yr in [1, 3, 5, 10]:
         if yr <= holding_period:
             val = purchase_price * (1 + growth_rate)**yr
             eq = val - loan_amount
-            pdf.cell(30, 7, f"Year {yr}", border=1, align="C")
-            pdf.cell(80, 7, f"${val:,.0f}", border=1, align="C")
-            pdf.cell(80, 7, f"${eq:,.0f}", border=1, align="C", new_x="LMARGIN", new_y="NEXT")
+            pdf.cell(30, 7, f"Year {yr}", border=1, align="C"); pdf.cell(80, 7, f"${val:,.0f}", border=1, align="C"); pdf.cell(80, 7, f"${eq:,.0f}", border=1, align="C", new_x="LMARGIN", new_y="NEXT")
     
-    # --- PAGE 2: EQUITY CHART ---
+    pdf.ln(8)
     pdf.section_header("7. Equity & Value Projections")
     fig, ax = plt.subplots(figsize=(8, 4.5)) 
     ax.plot(df_chart.index, df_chart["Property Value"], label="Market Value", color="#003366", linewidth=2.5)
@@ -882,11 +895,9 @@ def generate_pdf(salary_1_annual, salary_2_annual, total_monthly_living, total_e
     ax.yaxis.set_major_formatter(ticker.FuncFormatter(lambda x, pos: f'${x:,.0f}'))
     ax.grid(True, axis='y', linestyle="--", alpha=0.5)
     ax.legend(frameon=False, loc="upper left")
-    plt.tight_layout()
-    img_buffer = io.BytesIO()
+    plt.tight_layout(); img_buffer = io.BytesIO()
     plt.savefig(img_buffer, format="png", bbox_inches="tight", dpi=200) 
-    pdf.image(img_buffer, x=15, w=180)
-    plt.close()
+    pdf.image(img_buffer, x=15, w=180); plt.close()
 
     return bytes(pdf.output())
 
