@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 import io
 import os
 from datetime import datetime
+import matplotlib.ticker as ticker
 
 # --- PAGE SETUP ---
 st.set_page_config(page_title="Investment Analysis", layout="wide")
@@ -496,15 +497,44 @@ def generate_pdf():
     pdf.ln(5)
 
     # --- 7. GROWTH CHART ---
-    fig, ax = plt.subplots(figsize=(8, 3.0))
-    ax.plot(df_chart.index, df_chart["Property Value"], label="Market Value", color="#1f77b4", linewidth=2)
-    ax.plot(df_chart.index, df_chart["Equity"], label="Equity Position", color="#2ca02c", linewidth=2)
-    ax.set_title(f"Equity Projection ({growth_rate*100:.1f}% Annual Growth)")
-    ax.grid(True, linestyle="--", alpha=0.5)
-    ax.legend()
+    # Made it slightly taller for better spacing
+    fig, ax = plt.subplots(figsize=(8, 3.5)) 
+    
+    # Professional colors (deep blue to match your AQI logo, and a clean green)
+    color_market = "#003366" 
+    color_equity = "#2ca02c"
+    
+    # Plot lines with a modern fill underneath the equity curve
+    ax.plot(df_chart.index, df_chart["Property Value"], label="Market Value", color=color_market, linewidth=2.5)
+    ax.plot(df_chart.index, df_chart["Equity"], label="Equity Position", color=color_equity, linewidth=2.5)
+    ax.fill_between(df_chart.index, df_chart["Equity"], color=color_equity, alpha=0.1)
+    
+    # Styling Title
+    ax.set_title(f"Equity Projection ({growth_rate*100:.1f}% Annual Growth)", fontsize=12, fontweight='bold', color="#333333", pad=15)
+    
+    # --- FIX: Format Y-Axis as Currency ---
+    formatter = ticker.FuncFormatter(lambda x, pos: f'${x:,.0f}')
+    ax.yaxis.set_major_formatter(formatter)
+    
+    # Clean up Grid & Spines (Borders) for a modern, minimalistic look
+    ax.grid(True, axis='y', linestyle="--", alpha=0.5, color="#d3d3d3")
+    ax.grid(False, axis='x') # Removing vertical grid lines looks cleaner
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.spines['left'].set_color('#cccccc')
+    ax.spines['bottom'].set_color('#cccccc')
+    
+    # Soften tick labels
+    ax.tick_params(axis='both', colors='#666666', labelsize=9)
+    
+    # Clean legend without a heavy box
+    ax.legend(frameon=False, loc="upper left", fontsize=10)
+    
+    plt.tight_layout()
     
     img_buffer = io.BytesIO()
-    plt.savefig(img_buffer, format="png", bbox_inches="tight", dpi=150)
+    # Increased DPI to 200 for a sharper image in the PDF
+    plt.savefig(img_buffer, format="png", bbox_inches="tight", dpi=200) 
     pdf.image(img_buffer, x=15, w=180)
 
     return bytes(pdf.output())
