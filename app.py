@@ -4,11 +4,37 @@ import numpy as np
 import numpy_financial as npf
 from fpdf import FPDF
 import matplotlib.pyplot as plt
+import matplotlib.ticker as ticker
 import io
 import os
+import json # NEW: Required for saving the expense table
 from datetime import datetime
-import matplotlib.ticker as ticker
-import google.generativeai as genai 
+import google.generativeai as genai
+
+# --- DEFAULT LIVING EXPENSES (Extracted from CSV) ---
+DEFAULT_LIVING_EXPENSES_DATA = [
+    {"Category": "Transport & Vehicle", "Item": "Vehicle registration", "Monthly Amount ($)": 125.0},
+    {"Category": "Transport & Vehicle", "Item": "Vehicle maintenance", "Monthly Amount ($)": 25.0},
+    {"Category": "Transport & Vehicle", "Item": "Vehicle insurance", "Monthly Amount ($)": 100.0},
+    {"Category": "Transport & Vehicle", "Item": "Petrol", "Monthly Amount ($)": 100.0},
+    {"Category": "Transport & Vehicle", "Item": "Public Transport", "Monthly Amount ($)": 21.67},
+    {"Category": "Property Expenses", "Item": "Council Rates", "Monthly Amount ($)": 169.67},
+    {"Category": "Property Expenses", "Item": "Home and contents insurances", "Monthly Amount ($)": 150.0},
+    {"Category": "Services and Utilities", "Item": "Electricity", "Monthly Amount ($)": 250.0},
+    {"Category": "Services and Utilities", "Item": "Gas", "Monthly Amount ($)": 83.33},
+    {"Category": "Services and Utilities", "Item": "Water", "Monthly Amount ($)": 183.33},
+    {"Category": "Services and Utilities", "Item": "Mobile telephone", "Monthly Amount ($)": 165.0},
+    {"Category": "Services and Utilities", "Item": "Internet", "Monthly Amount ($)": 120.0},
+    {"Category": "Food and Groceries", "Item": "Groceries", "Monthly Amount ($)": 866.67},
+    {"Category": "Food and Groceries", "Item": "Restaurants", "Monthly Amount ($)": 433.33},
+    {"Category": "Food and Groceries", "Item": "Takeaway food", "Monthly Amount ($)": 216.67},
+    {"Category": "Recreation and Entertainment", "Item": "Subscription services (Pay TV, Music)", "Monthly Amount ($)": 160.0},
+    {"Category": "Child Expenses", "Item": "Private school fees", "Monthly Amount ($)": 16.67},
+    {"Category": "Child Expenses", "Item": "Medical", "Monthly Amount ($)": 50.0},
+    {"Category": "Child Expenses", "Item": "Clothing and uniforms", "Monthly Amount ($)": 16.67},
+    {"Category": "Health and Wellbeing", "Item": "Sports and gym fees", "Monthly Amount ($)": 80.0},
+    {"Category": "Other Living Expenses", "Item": "Cigarettes and Alcohol", "Monthly Amount ($)": 50.0}
+]
 
 # --- PAGE SETUP ---
 st.set_page_config(page_title="Investment Analysis", layout="wide")
@@ -52,7 +78,8 @@ if "form_data" not in st.session_state:
         "price": 650000,
         "beds": 2, "baths": 1, "cars": 1,
         "sal1": 150000, "sal2": 150000, "split": 50,
-        "growth": 4.0, "hold": 10
+        "growth": 4.0, "hold": 10,
+        "living_expenses_json": json.dumps(DEFAULT_LIVING_EXPENSES_DATA) # Set default expenses
     }
 
 def load_property(row):
@@ -70,6 +97,12 @@ def load_property(row):
         "growth": float(row["growth_rate"] * 100),
         "hold": int(row["holding_period"])
     }
+    
+    # NEW: Load custom expenses if they exist, otherwise fallback to default
+    if "living_expenses_json" in row and pd.notna(row["living_expenses_json"]):
+        st.session_state.form_data["living_expenses_json"] = row["living_expenses_json"]
+    else:
+        st.session_state.form_data["living_expenses_json"] = json.dumps(DEFAULT_LIVING_EXPENSES_DATA)
 
 # --- GEMINI AI YIELD ESTIMATOR ---
 @st.cache_data(ttl=3600, show_spinner=False)
@@ -125,7 +158,7 @@ holding_period = st.sidebar.slider("Holding Period (Years)", 1, 30, st.session_s
 
 # --- 2. CREATE TABS ---
 # Reordered to put Summary first
-tab0, tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9 = st.tabs([
+tab0, tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10 = st.tabs([
     "📊 Summary Dashboard",
     "Property & Acquisition", 
     "Income & Expenses", 
@@ -135,7 +168,8 @@ tab0, tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9 = st.tabs([
     "Tax & Gearing", 
     "10-Year Projections",
     "CGT Projection",
-    "Search History"
+    "Search History",
+    "Living Expenses"  # NEW TAB
 ])
 
 # --- TAB 1: ACQUISITION ---
@@ -413,6 +447,43 @@ with tab9:
     else:
         st.info("Download a PDF to save to history.")
 
+# --- TAB 10: LIVING EXPENSES ---
+with tab10:
+    st.subheader("Household Living Expenses (Monthly)")
+    st.markdown("Modify the default values or add new rows below. Your custom expenses will be saved with this property search.")
+    
+    # Load from session state
+    current_expenses = pd.DataFrame(json.loads(st.session_state.form_data["living_expenses_json"]))
+    
+    # Interactive data editor
+    edited_expenses = st.data_editor(
+        current_expenses,
+        num_rows="dynamic",
+        use_container_width=True,
+        column_config={
+            "Monthly Amount ($)": st.column_config.NumberColumn(
+                "Monthly Amount ($)",
+                help="Enter the monthly expense in dollars",
+                min_value=0.0,
+                step=10.0,
+                format="$%.2f",
+            )
+        },
+        key="living_expenses_editor"
+    )
+    
+    # Calculate totals
+    total_monthly_living = edited_expenses["Monthly Amount ($)"].sum()
+    total_annual_living = total_monthly_living * 12
+    
+    st.divider()
+    le_col1, le_col2 = st.columns(2)
+    le_col1.metric("Total Monthly Living Expenses", f"${total_monthly_living:,.2f}")
+    le_col2.metric("Total Annual Living Expenses", f"${total_annual_living:,.2f}")
+    
+    # Save back to session state so it's ready for download/history saving
+    st.session_state.form_data["living_expenses_json"] = edited_expenses.to_json(orient="records")
+
 # --- PDF GENERATION LOGIC ---
 st.markdown("---")
 st.subheader("📄 Export Analysis Report")
@@ -602,6 +673,7 @@ st.download_button(
         "salary_1": salary_1, "salary_2": salary_2,
         "ownership_split": ownership_split,
         "growth_rate": growth_rate,
-        "holding_period": holding_period
+        "holding_period": holding_period,
+        "living_expenses_json": st.session_state.form_data["living_expenses_json"] # NEW: Pass expenses to history
     })
 )
