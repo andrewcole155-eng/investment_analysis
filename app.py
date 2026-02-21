@@ -76,6 +76,7 @@ def save_to_history(name, url, params):
     history_df.to_csv(HISTORY_FILE, index=False)
 
 # --- 1. SESSION STATE (FIXED FOR RAW INPUTS & EQUITY LOAN) ---
+# --- 1. SESSION STATE (FIXED FOR RAW INPUTS & EQUITY LOAN) ---
 if "form_data" not in st.session_state:
     st.session_state.form_data = {
         "prop_name": "2 Example Street MELBOURNE",
@@ -88,9 +89,24 @@ if "form_data" not in st.session_state:
         "growth": 4.0, "hold": 10,
         "living_expenses_json": json.dumps(DEFAULT_LIVING_EXPENSES_DATA),
         "ext_mortgage": 2921.0, "ext_car_loan": 0.0, "ext_cc": 0.0, "ext_other": 0.0,
-        # NEW EQUITY LOAN VARIABLES
         "use_eq": True, "eq_amount": 170000.0, "eq_rate": 6.20 
     }
+    
+    # PRE-LOAD WIDGET KEYS TO PREVENT STREAMLIT WARNINGS
+    st.session_state.sb_prop_name = "2 Example Street MELBOURNE"
+    st.session_state.sb_prop_url = "https://www.realestate.com.au/"
+    st.session_state.sb_price = 650000.0
+    st.session_state.sb_beds = 2
+    st.session_state.sb_baths = 1
+    st.session_state.sb_cars = 1
+    st.session_state.salary_input_1 = 3811.78
+    st.session_state.s1_freq_selector = "Fortnightly"
+    st.session_state.salary_input_2 = 8429.83
+    st.session_state.s2_freq_selector = "Monthly"
+    st.session_state.sb_ext_mortgage = 2921.0
+    st.session_state.sb_ext_car_loan = 0.0
+    st.session_state.sb_ext_cc = 0.0
+    st.session_state.sb_ext_other = 0.0
 
 # --- 2. LOAD PROPERTY FUNCTION (CALLBACK VERSION) ---
 def load_property(row):
@@ -162,84 +178,32 @@ def fetch_market_yield(address, beds, baths, cars):
 # --- 1. GLOBAL INPUTS (SIDEBAR) ---
 st.sidebar.header("📍 Core Parameters")
 
-property_name = st.sidebar.text_input(
-    "Property Name/Address", 
-    value=st.session_state.form_data["prop_name"],
-    key="sb_prop_name"
-)
-property_url = st.sidebar.text_input(
-    "Property Listing URL", 
-    value=st.session_state.form_data["prop_url"],
-    key="sb_prop_url"
-)
+property_name = st.sidebar.text_input("Property Name/Address", key="sb_prop_name")
+property_url = st.sidebar.text_input("Property Listing URL", key="sb_prop_url")
 
 col_spec1, col_spec2, col_spec3 = st.sidebar.columns(3)
-beds = col_spec1.number_input(
-    "Beds", 
-    value=int(st.session_state.form_data["beds"]), 
-    step=1,
-    key="sb_beds"
-)
-baths = col_spec2.number_input(
-    "Baths", 
-    value=int(st.session_state.form_data["baths"]), 
-    step=1,
-    key="sb_baths"
-)
-cars = col_spec3.number_input(
-    "Cars", 
-    value=int(st.session_state.form_data["cars"]), 
-    step=1,
-    key="sb_cars"
-)
+beds = col_spec1.number_input("Beds", step=1, key="sb_beds")
+baths = col_spec2.number_input("Baths", step=1, key="sb_baths")
+cars = col_spec3.number_input("Cars", step=1, key="sb_cars")
 
-purchase_price = st.sidebar.number_input(
-    "Purchase Price ($)", 
-    value=float(st.session_state.form_data["price"]), 
-    step=10000.0,
-    key="sb_price"
-)
+purchase_price = st.sidebar.number_input("Purchase Price ($)", step=10000.0, key="sb_price")
 
 st.sidebar.subheader("Tax Profiles (Post-Tax)")
 
 # Investor 1
 col_s1_val, col_s1_freq = st.sidebar.columns([2, 1])
-s1_input = col_s1_val.number_input(
-    "Inv 1 Take-Home ($)", 
-    value=float(st.session_state.form_data["s1_input"]), # Pull RAW from state
-    step=100.0,
-    key="salary_input_1"
-)
-s1_freq = col_s1_freq.selectbox(
-    "Freq", 
-    ["Fortnightly", "Monthly", "Annually"], 
-    index=["Fortnightly", "Monthly", "Annually"].index(st.session_state.form_data["s1_freq"]), # Force state alignment
-    key="s1_freq_selector"
-)
+s1_input = col_s1_val.number_input("Inv 1 Take-Home ($)", step=100.0, key="salary_input_1")
+s1_freq = col_s1_freq.selectbox("Freq", ["Fortnightly", "Monthly", "Annually"], key="s1_freq_selector")
 
 # Investor 2
 col_s2_val, col_s2_freq = st.sidebar.columns([2, 1])
-s2_input = col_s2_val.number_input(
-    "Inv 2 Take-Home ($)", 
-    value=float(st.session_state.form_data["s2_input"]), # Pull RAW from state
-    step=100.0,
-    key="salary_input_2"
-)
-s2_freq = col_s2_freq.selectbox(
-    "Freq", 
-    ["Monthly", "Fortnightly", "Annually"], 
-    index=["Monthly", "Fortnightly", "Annually"].index(st.session_state.form_data["s2_freq"]), # Force state alignment
-    key="s2_freq_selector"
-)
+s2_input = col_s2_val.number_input("Inv 2 Take-Home ($)", step=100.0, key="salary_input_2")
+s2_freq = col_s2_freq.selectbox("Freq", ["Monthly", "Fortnightly", "Annually"], key="s2_freq_selector")
 
 # --- Mapping for annualization ---
 freq_map = {"Monthly": 12, "Fortnightly": 26, "Annually": 1}
-
-# These must be the final annual take-home figures
 salary_1_annual = float(s1_input * freq_map[s1_freq])
 salary_2_annual = float(s2_input * freq_map[s2_freq])
-
-# Define aliases for other tabs to ensure consistency
 salary_1 = salary_1_annual
 salary_2 = salary_2_annual
 annual_net_1 = salary_1_annual 
@@ -684,36 +648,15 @@ with tab10:
 
     st.divider()
     
-    # --- NEW: EXISTING DEBT COMMITMENTS ---
+# --- NEW: EXISTING DEBT COMMITMENTS ---
     st.subheader("💳 Existing Debt Commitments (Monthly)")
     d1, d2, d3, d4 = st.columns(4)
 
-    # We pull these directly from the session state 'Source of Truth'
-    ext_mortgage = d1.number_input(
-        "Existing Mortgage(s) ($)", 
-        value=float(st.session_state.form_data.get("ext_mortgage", 0.0)), 
-        step=100.0,
-        key="sb_ext_mortgage" # Added a specific key
-    )
-    ext_car_loan = d2.number_input(
-        "Car Loan(s) ($)", 
-        value=float(st.session_state.form_data.get("ext_car_loan", 0.0)), 
-        step=50.0,
-        key="sb_ext_car_loan"
-    )
-    ext_cc = d3.number_input(
-        "Credit Card Payments ($)", 
-        value=float(st.session_state.form_data.get("ext_cc", 0.0)), 
-        step=50.0, 
-        help="Typically assessed at 3-4% of total limit",
-        key="sb_ext_cc"
-    )
-    ext_other = d4.number_input(
-        "Other Loans ($)", 
-        value=float(st.session_state.form_data.get("ext_other", 0.0)), 
-        step=50.0,
-        key="sb_ext_other"
-    )
+    # Removed the 'value=' arguments to prevent Streamlit warnings
+    ext_mortgage = d1.number_input("Existing Mortgage(s) ($)", step=100.0, key="sb_ext_mortgage")
+    ext_car_loan = d2.number_input("Car Loan(s) ($)", step=50.0, key="sb_ext_car_loan")
+    ext_cc = d3.number_input("Credit Card Payments ($)", step=50.0, help="Typically assessed at 3-4% of total limit", key="sb_ext_cc")
+    ext_other = d4.number_input("Other Loans ($)", step=50.0, key="sb_ext_other")
     
     total_existing_debt_m = ext_mortgage + ext_car_loan + ext_cc + ext_other
     
