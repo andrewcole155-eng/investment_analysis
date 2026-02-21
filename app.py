@@ -428,3 +428,14 @@ def generate_pdf():
     pdf.multi_cell(0, 4, disclaimer, align="C")
 
     return bytes(pdf.output())
+
+# --- DOWNLOAD BUTTON ---
+pdf_bytes = generate_pdf()
+st.download_button(
+    label="⬇️ Download Full Summary PDF",
+    data=pdf_bytes,
+    file_name=f"{property_name.replace(' ', '_')}_Summary.pdf",
+    mime="application/pdf",
+    on_click=save_to_history,
+    args=(property_name, property_url)
+)
