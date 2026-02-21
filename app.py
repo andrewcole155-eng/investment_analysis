@@ -132,9 +132,6 @@ def load_property(row):
     st.session_state.sb_ext_car_loan = st.session_state.form_data["ext_car_loan"]
     st.session_state.sb_ext_cc = st.session_state.form_data["ext_cc"]
     st.session_state.sb_ext_other = st.session_state.form_data["ext_other"]
-            
-    # 3. Rerun to instantly show the changes
-    st.rerun()
 
 # --- GEMINI AI YIELD ESTIMATOR ---
 @st.cache_data(ttl=3600, show_spinner=False)
@@ -723,7 +720,6 @@ with tab10:
 
 # --- PDF GENERATION LOGIC ---
 st.markdown("---")
-st.subheader("📄 Export Analysis Report")
 
 def generate_pdf(salary_1_annual, salary_2_annual, total_monthly_living, total_existing_debt_m):
     # 1. Fetch AI Market Yield Data
