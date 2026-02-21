@@ -75,33 +75,30 @@ def save_to_history(name, url, params):
         
     history_df.to_csv(HISTORY_FILE, index=False)
 
-# --- 1. SESSION STATE (FIXED FOR RAW INPUTS) ---
+# --- 1. SESSION STATE (FIXED FOR RAW INPUTS & EQUITY LOAN) ---
 if "form_data" not in st.session_state:
     st.session_state.form_data = {
         "prop_name": "2 Example Street MELBOURNE",
         "prop_url": "https://www.realestate.com.au/",
         "price": 650000.0,
         "beds": 2, "baths": 1, "cars": 1,
-        "s1_input": 3811.78,         # SAVING RAW INPUT
-        "s1_freq": "Fortnightly",   # SAVING RAW FREQ
-        "s2_input": 8429.83,         # SAVING RAW INPUT
-        "s2_freq": "Monthly",       # SAVING RAW FREQ
+        "s1_input": 3811.78, "s1_freq": "Fortnightly",  
+        "s2_input": 8429.83, "s2_freq": "Monthly",      
         "split": 50,
         "growth": 4.0, "hold": 10,
         "living_expenses_json": json.dumps(DEFAULT_LIVING_EXPENSES_DATA),
-        "ext_mortgage": 2921.0, "ext_car_loan": 0.0, "ext_cc": 0.0, "ext_other": 0.0
+        "ext_mortgage": 2921.0, "ext_car_loan": 0.0, "ext_cc": 0.0, "ext_other": 0.0,
+        # NEW EQUITY LOAN VARIABLES
+        "use_eq": True, "eq_amount": 170000.0, "eq_rate": 6.20 
     }
 
 # --- 2. LOAD PROPERTY FUNCTION (CALLBACK VERSION) ---
 def load_property(row):
-    # 1. Update the 'Source of Truth' dictionary
     st.session_state.form_data = {
         "prop_name": row["Property Name"],
         "prop_url": row["Listing URL"],
         "price": float(row["purchase_price"]),
-        "beds": int(row["beds"]),
-        "baths": int(row["baths"]),
-        "cars": int(row["cars"]),
+        "beds": int(row["beds"]), "baths": int(row["baths"]), "cars": int(row["cars"]),
         "s1_input": float(row.get("s1_input", 3811.78)),
         "s1_freq": row.get("s1_freq", "Fortnightly"),
         "s2_input": float(row.get("s2_input", 8429.83)),
@@ -113,11 +110,12 @@ def load_property(row):
         "ext_mortgage": float(row.get("ext_mortgage", 2921.0)),
         "ext_car_loan": float(row.get("ext_car_loan", 0.0)),
         "ext_cc": float(row.get("ext_cc", 0.0)),
-        "ext_other": float(row.get("ext_other", 0.0))
+        "ext_other": float(row.get("ext_other", 0.0)),
+        "use_eq": bool(row.get("use_eq", True)),
+        "eq_amount": float(row.get("eq_amount", 170000.0)),
+        "eq_rate": float(row.get("eq_rate", 6.20))
     }
 
-    # 2. Inject data directly into widget keys 
-    # (This is now perfectly safe because it runs BEFORE the widgets are drawn)
     st.session_state.sb_prop_name = st.session_state.form_data["prop_name"]
     st.session_state.sb_prop_url = st.session_state.form_data["prop_url"]
     st.session_state.sb_price = st.session_state.form_data["price"]
@@ -341,71 +339,69 @@ with tab2:
     metric_col1.metric("Gross Annual Income", f"${annual_gross_income:,.2f}")
     metric_col2.metric("Total Annual Expenses", f"${total_operating_expenses:,.2f}")
 
-# --- TAB 3: LOAN DETAILS ---
+# --- TAB 3: LOAN DETAILS (UPDATED FOR EQUITY FUNDING) ---
 with tab3:
-    st.subheader("Financing Structure")
+    st.subheader("1. Core Investment Loan (Secured by Investment)")
     
     c1, c2 = st.columns(2)
     lvr_pct = c1.slider("LVR (%)", 0, 100, 80) / 100
     interest_rate = c2.number_input("Interest Rate (%)", value=5.49, step=0.01) / 100
     loan_term = c1.number_input("Loan Term (Years)", value=30, step=1)
-    
     loan_type = c2.selectbox("Active Repayment Type (For Cash Flow)", ["Interest Only", "Principal & Interest"])
     
     loan_amount = purchase_price * lvr_pct
-    
     monthly_io = (loan_amount * interest_rate) / 12
-    annual_io = loan_amount * interest_rate
-    
     monthly_pi = abs(npf.pmt(interest_rate/12, loan_term*12, loan_amount))
-    annual_pi = monthly_pi * 12
-    
-    savings_io = annual_pi - annual_io
     
     if loan_type == "Interest Only":
-        annual_repayment = annual_io
-        annual_interest = annual_io
+        core_annual_repayment = monthly_io * 12
     else:
-        annual_repayment = annual_pi
-        annual_interest = annual_io 
+        core_annual_repayment = monthly_pi * 12
+    core_annual_interest = loan_amount * interest_rate 
         
     st.divider()
-    st.markdown(f"### Calculated Loan Amount: **${loan_amount:,.2f}**")
+    st.subheader("2. Deposit Funding (Equity Release Loan)")
+    st.info("💡 Interest on equity loans used to fund deposits/stamp duty is tax-deductible.")
     
-    col_pi, col_io = st.columns(2)
-    with col_pi:
-        st.markdown("#### Principal & Interest (P&I)")
-        st.write(f"**Monthly P&I Repayment:** ${monthly_pi:,.2f}")
-        st.write(f"**Annual Repayment:** ${annual_pi:,.2f}")
+    use_equity = st.checkbox("Fund Deposit via Equity Release?", value=st.session_state.form_data["use_eq"])
+    
+    eq1, eq2 = st.columns(2)
+    if use_equity:
+        eq_amount = eq1.number_input("Equity Loan Amount ($)", value=float(st.session_state.form_data["eq_amount"]), step=5000.0)
+        eq_rate = eq2.number_input("Equity Loan Rate (%)", value=float(st.session_state.form_data["eq_rate"]), step=0.01) / 100
         
-    with col_io:
-        st.markdown("#### Interest Only (IO)")
-        st.write(f"**Monthly I Repayment:** ${monthly_io:,.2f}")
-        st.write(f"**Annual Repayment:** ${annual_io:,.2f}")
+        # Equity loans are assumed 30-year P&I as per user notes
+        eq_monthly_pi = abs(npf.pmt(eq_rate/12, 30*12, eq_amount))
+        eq_annual_repayment = eq_monthly_pi * 12
+        eq_annual_interest = eq_amount * eq_rate
+    else:
+        eq_amount = 0.0; eq_rate = 0.0; eq_monthly_pi = 0.0; eq_annual_repayment = 0.0; eq_annual_interest = 0.0
+
+    # AGGREGATE TOTALS FOR DOWNSTREAM TABS
+    total_annual_debt_repayment = core_annual_repayment + eq_annual_repayment
+    total_tax_deductible_interest = core_annual_interest + eq_annual_interest
+    actual_cash_outlay = total_cost_base - loan_amount - eq_amount
 
 # --- TAB 4: CASH FLOW ---
 with tab4:
     st.subheader("Pre-Tax Cash Flow")
     
     net_operating_income = annual_gross_income - total_operating_expenses
-    pre_tax_cashflow = net_operating_income - annual_repayment
+    pre_tax_cashflow = net_operating_income - total_annual_debt_repayment
     
     st.divider()
     cf_col1, cf_col2 = st.columns([1, 1])
-    
     with cf_col1:
         st.write("**Annual Rental Income**")
         st.write("**Annual Operating Expenses**")
         st.write("**Net Operating Income (NOI)**")
-        st.write(f"**Annual Debt Service ({'IO' if loan_type == 'Interest Only' else 'P&I'})**")
+        st.write(f"**Total Debt Service (Core + Equity Loan)**")
         st.markdown("### **Annual Cash Flow**")
-        
     with cf_col2:
         st.write(f"${annual_gross_income:,.2f}")
         st.write(f"-${total_operating_expenses:,.2f}")
         st.write(f"**${net_operating_income:,.2f}**")
-        st.write(f"-${annual_repayment:,.2f}")
-        
+        st.write(f"-${total_annual_debt_repayment:,.2f}")
         if pre_tax_cashflow < 0:
             st.markdown(f"<h3 style='color: #ff4b4b;'>-${abs(pre_tax_cashflow):,.2f}</h3>", unsafe_allow_html=True)
         else:
@@ -418,6 +414,44 @@ with tab5:
     div_40 = st.number_input("Plant & Equipment (Div 40) ($)", value=8500, step=500)
     total_depreciation = div_43 + div_40
     st.metric("Total Annual Depreciation", f"${total_depreciation:,.2f}")
+
+# --- TAB 6: TAX, GEARING & SERVICEABILITY ---
+with tab6:
+    st.subheader("Household Tax Impact & Cash Flow")
+    
+    def calculate_tax(income):
+        if income <= 18200: return 0
+        elif income <= 45000: return (income - 18200) * 0.16
+        elif income <= 135000: return 4288 + (income - 45000) * 0.30
+        elif income <= 190000: return 31288 + (income - 135000) * 0.37
+        else: return 51638 + (income - 190000) * 0.45
+
+    # Use combined interest for massive negative gearing boost
+    total_tax_deductions = total_operating_expenses + total_tax_deductible_interest + total_depreciation
+    net_property_taxable_income = annual_gross_income - total_tax_deductions
+    
+    property_income_1 = net_property_taxable_income * ownership_split
+    property_income_2 = net_property_taxable_income * (1 - ownership_split)
+    
+    base_tax_1 = calculate_tax(salary_1)
+    new_tax_1 = calculate_tax(max(0, salary_1 + property_income_1))
+    tax_variance_1 = base_tax_1 - new_tax_1
+    
+    base_tax_2 = calculate_tax(salary_2)
+    new_tax_2 = calculate_tax(max(0, salary_2 + property_income_2))
+    tax_variance_2 = base_tax_2 - new_tax_2
+    
+    total_tax_variance = tax_variance_1 + tax_variance_2
+    post_tax_cashflow = pre_tax_cashflow + total_tax_variance
+
+    t_col1, t_col2 = st.columns(2)
+    t_col1.metric("Pre-Tax Cash Flow (Annual)", f"${pre_tax_cashflow:,.2f}")
+    if total_tax_variance > 0:
+        t_col2.metric("Combined Estimated Tax Refund", f"${total_tax_variance:,.2f}")
+    else:
+        t_col2.metric("Combined Estimated Tax Payable", f"${abs(total_tax_variance):,.2f}")
+        
+    st.metric("Household Net Post-Tax Cash Flow (Annual)", f"${post_tax_cashflow:,.2f}")
 
 # --- TAB 6: TAX, GEARING & SERVICEABILITY ---
 with tab6:
@@ -722,9 +756,9 @@ with tab10:
 # --- EXPORT & SAVE SECTION (BOTTOM OF SCRIPT) ---
 # ==========================================================
 st.markdown("---")
+st.subheader("📄 Export Analysis Report")
 
 def generate_pdf(salary_1_annual, salary_2_annual, total_monthly_living, total_existing_debt_m):
-    # Fetch AI Market Yield Data
     market_yield = fetch_market_yield(property_name, beds, baths, cars)
     property_yield = (annual_gross_income / purchase_price) * 100
 
@@ -779,17 +813,21 @@ def generate_pdf(salary_1_annual, salary_2_annual, total_monthly_living, total_e
     pdf.ln(3)
 
     # --- 1. ACQUISITION & FINANCE ---
-    cash_outlay = total_cost_base - loan_amount
-    pdf.section_header("1. Acquisition & Finance")
-    # Added LVR Transparency
-    pdf.row("Purchase Price:", f"${purchase_price:,.0f}", "Loan Amount:", f"${loan_amount:,.0f} ({lvr_pct*100:.0f}% LVR)")
-    pdf.row("Interest Rate:", f"{interest_rate*100:.2f}%", "Loan Type:", f"{loan_type}")
-    pdf.row("Total Entry Costs:", f"${total_acquisition_costs:,.0f}", "Total Cash Outlay:", f"${cash_outlay:,.0f}")
+    pdf.section_header("1. Acquisition & Finance (100% Debt Funded Structure)")
+    pdf.row("Purchase Price:", f"${purchase_price:,.0f}", "Core Loan Amount:", f"${loan_amount:,.0f} ({lvr_pct*100:.0f}% LVR)")
+    
+    if use_equity:
+        pdf.row("Total Entry Costs:", f"${total_acquisition_costs:,.0f}", "Equity Release Loan:", f"${eq_amount:,.0f}")
+        pdf.set_text_color(0, 128, 0) # Green for zero cash
+        pdf.row("Total Capital Required:", f"${total_cost_base:,.0f}", "CASH FROM SAVINGS:", f"${actual_cash_outlay:,.0f}")
+        pdf.set_text_color(0, 0, 0)
+    else:
+        pdf.row("Total Entry Costs:", f"${total_acquisition_costs:,.0f}", "Total Cash Outlay:", f"${actual_cash_outlay:,.0f}")
+        
     pdf.ln(3)
 
-    # --- 2. YIELD ANALYSIS & MARKET COMPARISON ---
+    # --- 2. YIELD ANALYSIS ---
     pdf.section_header("2. Yield Analysis & Market Comparison (AI Estimated)")
-    # Added Net Rental Yield
     net_yield = ((annual_gross_income - total_operating_expenses) / purchase_price) * 100
     pdf.row("Property Gross Yield:", f"{property_yield:.2f}%", "Property Net Yield:", f"{net_yield:.2f}%")
     if market_yield:
@@ -801,55 +839,48 @@ def generate_pdf(salary_1_annual, salary_2_annual, total_monthly_living, total_e
         pdf.set_text_color(128, 128, 128); pdf.row("Est. Suburb Average:", "Data Unavailable", "Market Status:", "N/A")
     pdf.set_text_color(0, 0, 0); pdf.ln(3)
 
-    # --- 3. PROPERTY PERFORMANCE (ANNUAL PRE-TAX) ---
+    # --- 3. PROPERTY PERFORMANCE ---
     pdf.section_header("3. Property Performance (Annual Pre-Tax)")
-    
-    # Added Cash-on-Cash Return & Vacancy Assumption
-    cash_on_cash = (pre_tax_cashflow / cash_outlay) * 100 if cash_outlay > 0 else 0
+    if actual_cash_outlay > 0:
+        cash_on_cash = f"{(pre_tax_cashflow / actual_cash_outlay) * 100:.2f}%"
+    else:
+        cash_on_cash = "Infinite (100% Financed)"
+
     pdf.row(f"Gross Rent ({vacancy_pct:.1f}% Vac):", f"${annual_gross_income:,.0f}", "Operating Expenses:", f"-${total_operating_expenses:,.0f}")
+    pdf.set_font("helvetica", "I", 8); pdf.set_text_color(120, 120, 120)
+    pdf.cell(95, 4, "", border=0); pdf.cell(0, 4, f"(Strata: ${strata_m*12:,.0f} | Mgt: ${mgt_fee_m*12:,.0f} | Other: ${(rates_m+water_m+insurance_m+maint_m+other_m)*12:,.0f})", border=0, new_x="LMARGIN", new_y="NEXT")
+    pdf.set_text_color(0, 0, 0); pdf.ln(1)
     
-    # Added High-Level Expense Breakdown
-    pdf.set_font("helvetica", "I", 8)
-    pdf.set_text_color(120, 120, 120)
-    pdf.cell(95, 4, "", border=0) # offset alignment
-    pdf.cell(0, 4, f"(Strata: ${strata_m*12:,.0f} | Mgt: ${mgt_fee_m*12:,.0f} | Other: ${(rates_m+water_m+insurance_m+maint_m+other_m)*12:,.0f})", border=0, new_x="LMARGIN", new_y="NEXT")
-    pdf.set_text_color(0, 0, 0)
-    pdf.ln(1)
+    pdf.row("Total Interest Deductible:", f"-${total_tax_deductible_interest:,.0f}", "Net Property Cash Flow:", f"${pre_tax_cashflow:,.2f}")
     
-    pdf.row("Loan Interest Expense:", f"-${annual_interest:,.0f}", "Net Property Cash Flow:", f"${pre_tax_cashflow:,.2f}")
-    
-    # Custom color alignment to match the old style
     pdf.set_font("helvetica", "I", 10); pdf.set_text_color(0, 102, 204)
-    pdf.cell(50, 7, "Cash-on-Cash Return:", border=0)
-    pdf.set_font("helvetica", "B", 10)
-    pdf.cell(45, 7, f"{cash_on_cash:.2f}%", border=0)
-    pdf.set_font("helvetica", "I", 10)
-    pdf.cell(50, 7, "Est. Additional Tax Refund:", border=0)
-    pdf.set_font("helvetica", "B", 10)
+    pdf.cell(50, 7, "Cash-on-Cash Return:", border=0); pdf.set_font("helvetica", "B", 10); pdf.cell(45, 7, f"{cash_on_cash}", border=0)
+    pdf.set_font("helvetica", "I", 10); pdf.cell(50, 7, "Est. Additional Tax Refund:", border=0); pdf.set_font("helvetica", "B", 10)
     pdf.cell(0, 7, f"${total_tax_variance:,.2f}", border=0, new_x="LMARGIN", new_y="NEXT")
     pdf.set_text_color(0, 0, 0); pdf.ln(3)
 
-    # --- 4. MONTHLY HOUSEHOLD SERVICEABILITY ---
+    # --- 4. HOUSEHOLD SERVICEABILITY ---
     pdf.section_header("4. Monthly Household Serviceability")
     total_household_net_m = (salary_1_annual + salary_2_annual) / 12
     shaded_rent_m = (monthly_rent * 0.80) 
-    new_mortgage_m = monthly_io if loan_type == "Interest Only" else monthly_pi
+    core_mortgage_m = monthly_io if loan_type == "Interest Only" else monthly_pi
+    total_new_loan_repayments = core_mortgage_m + eq_monthly_pi # Combines both loans
     prop_expenses_m = total_operating_expenses / 12
-    net_monthly_surplus = (total_household_net_m + shaded_rent_m) - (total_monthly_living + total_existing_debt_m + new_mortgage_m + prop_expenses_m)
+    
+    net_monthly_surplus = (total_household_net_m + shaded_rent_m) - (total_monthly_living + total_existing_debt_m + total_new_loan_repayments + prop_expenses_m)
 
-    pdf.set_font("helvetica", "B", 10); pdf.cell(0, 7, "Serviceability Breakdown (Monthly):", new_x="LMARGIN", new_y="NEXT")
-    pdf.set_font("helvetica", "", 10)
+    pdf.set_font("helvetica", "B", 10); pdf.cell(0, 7, "Serviceability Breakdown (Monthly):", new_x="LMARGIN", new_y="NEXT"); pdf.set_font("helvetica", "", 10)
     pdf.row("Take-Home Pay:", f"${total_household_net_m:,.2f}", "Living Expenses:", f"-${total_monthly_living:,.2f}")
-    pdf.row("Rental Income (80%):", f"${shaded_rent_m:,.2f}", "Existing Debts:", f"-${total_existing_debt_m:,.2f}")
-    pdf.row("New Property Loan:", f"-${new_mortgage_m:,.2f}", "Prop. Operating Exp:", f"-${prop_expenses_m:,.2f}")
+    pdf.row("Rental Income (80%):", f"${shaded_rent_m:,.2f}", "Existing Debts (PPOR):", f"-${total_existing_debt_m:,.2f}")
+    pdf.row("All New Loan Repayments:", f"-${total_new_loan_repayments:,.2f}", "Prop. Operating Exp:", f"-${prop_expenses_m:,.2f}")
     
-    # Calculate Serviceability Stress Test (+3% APRA Buffer on P&I)
-    stress_rate = interest_rate + 0.03
-    stress_pi = abs(npf.pmt(stress_rate/12, loan_term*12, loan_amount))
-    stress_surplus = (total_household_net_m + shaded_rent_m) - (total_monthly_living + total_existing_debt_m + stress_pi + prop_expenses_m)
+    # Stress Test (+3% APRA Buffer on BOTH loans P&I)
+    stress_core_pi = abs(npf.pmt((interest_rate+0.03)/12, loan_term*12, loan_amount))
+    stress_eq_pi = abs(npf.pmt((eq_rate+0.03)/12, 30*12, eq_amount)) if use_equity else 0
+    stress_surplus = (total_household_net_m + shaded_rent_m) - (total_monthly_living + total_existing_debt_m + stress_core_pi + stress_eq_pi + prop_expenses_m)
     
-    # Calculate New Loan DTI (against Net Income)
-    dti = loan_amount / (salary_1_annual + salary_2_annual) if (salary_1_annual + salary_2_annual) > 0 else 0
+    total_new_debt_amount = loan_amount + eq_amount
+    dti = total_new_debt_amount / (salary_1_annual + salary_2_annual) if (salary_1_annual + salary_2_annual) > 0 else 0
 
     pdf.ln(2)
     if net_monthly_surplus >= 0:
@@ -859,21 +890,18 @@ def generate_pdf(salary_1_annual, salary_2_annual, total_monthly_living, total_e
         pdf.set_text_color(200, 0, 0); pdf.set_font("helvetica", "B", 12)
         pdf.cell(0, 8, f"ESTIMATED MONTHLY DEFICIT: ${abs(net_monthly_surplus):,.2f}", align="R", new_x="LMARGIN", new_y="NEXT")
     
-    # Inject Stress Test & DTI Ratio
-    pdf.set_text_color(100, 100, 100)
-    pdf.set_font("helvetica", "I", 9)
-    pdf.cell(0, 5, f"New Loan to Net Income (DTI): {dti:.1f}x   |   Bank Stress Test (+3% P&I): ${stress_surplus:,.2f} Surplus/Deficit", align="R", new_x="LMARGIN", new_y="NEXT")
-    
+    pdf.set_text_color(100, 100, 100); pdf.set_font("helvetica", "I", 9)
+    pdf.cell(0, 5, f"New Debt to Net Income (DTI): {dti:.1f}x   |   Bank Stress Test (+3% P&I): ${stress_surplus:,.2f} Surplus/Deficit", align="R", new_x="LMARGIN", new_y="NEXT")
     pdf.set_text_color(0, 0, 0); pdf.ln(3)
 
-    # --- 5. EXIT STRATEGY & CGT ---
+    # --- 5. EXIT STRATEGY ---
     pdf.section_header(f"5. Exit Strategy & CGT Projection (Year {holding_period})")
     pdf.row("Est. Sale Price:", f"${future_values[-1]:,.0f}", "Gross Capital Gain:", f"${capital_gain:,.0f}")
     pdf.row("Marginal Tax Rate:", f"{est_marginal_rate*100:.1f}%", "Est. CGT Payable:", f"${cgt_payable:,.0f}")
     pdf.set_font("helvetica", "B", 10); pdf.row("NET PROFIT ON SALE:", f"${net_profit_on_sale:,.0f}")
     pdf.ln(3)
 
-    # --- 6. WEALTH MILESTONES & CHARTS ---
+    # --- 6. CHARTS ---
     pdf.add_page()
     pdf.section_header("6. Projected Wealth Milestones")
     pdf.set_font("helvetica", "B", 9); pdf.set_fill_color(240, 240, 240)
@@ -882,15 +910,19 @@ def generate_pdf(salary_1_annual, salary_2_annual, total_monthly_living, total_e
     for yr in [1, 3, 5, 10]:
         if yr <= holding_period:
             val = purchase_price * (1 + growth_rate)**yr
-            eq = val - loan_amount
+            eq = val - loan_amount - eq_amount # Subtracting BOTH loans for true equity
             pdf.cell(30, 7, f"Year {yr}", border=1, align="C"); pdf.cell(80, 7, f"${val:,.0f}", border=1, align="C"); pdf.cell(80, 7, f"${eq:,.0f}", border=1, align="C", new_x="LMARGIN", new_y="NEXT")
     
     pdf.ln(8)
     pdf.section_header("7. Equity & Value Projections")
     fig, ax = plt.subplots(figsize=(8, 4.5)) 
     ax.plot(df_chart.index, df_chart["Property Value"], label="Market Value", color="#003366", linewidth=2.5)
-    ax.plot(df_chart.index, df_chart["Equity"], label="Equity Position", color="#2ca02c", linewidth=2.5)
-    ax.fill_between(df_chart.index, df_chart["Equity"], color="#2ca02c", alpha=0.1)
+    
+    # Calculate true equity accounting for both loans
+    true_equity = df_chart["Property Value"] - loan_amount - eq_amount
+    ax.plot(df_chart.index, true_equity, label="Equity Position", color="#2ca02c", linewidth=2.5)
+    ax.fill_between(df_chart.index, true_equity, color="#2ca02c", alpha=0.1)
+    
     ax.set_title(f"Equity Projection ({growth_rate*100:.1f}% Annual Growth)", fontsize=12, fontweight='bold', pad=15)
     ax.yaxis.set_major_formatter(ticker.FuncFormatter(lambda x, pos: f'${x:,.0f}'))
     ax.grid(True, axis='y', linestyle="--", alpha=0.5)
@@ -901,44 +933,34 @@ def generate_pdf(salary_1_annual, salary_2_annual, total_monthly_living, total_e
 
     return bytes(pdf.output())
 
-# ==========================================================
-# --- EXPORT & SAVE SECTION (BOTTOM OF SCRIPT) ---
-# ==========================================================
-st.markdown("---")
-st.subheader("📄 Export Analysis Report")
+# Generate PDF safely outside of column wrappers
+pdf_bytes = generate_pdf(salary_1_annual, salary_2_annual, total_monthly_living, total_existing_debt_m)
 
-# 1. Generate PDF outside of columns to prevent UI artifacts
-pdf_bytes = generate_pdf(
-    salary_1_annual, 
-    salary_2_annual, 
-    total_monthly_living, 
-    total_existing_debt_m
-)
+# Package all raw inputs securely to stop Revisit Math bugs
+save_data = {
+    "purchase_price": purchase_price,
+    "beds": beds, "baths": baths, "cars": cars,
+    "s1_input": s1_input, "s1_freq": s1_freq, 
+    "s2_input": s2_input, "s2_freq": s2_freq, 
+    "ownership_split": ownership_split,
+    "growth_rate": growth_rate,
+    "holding_period": holding_period,
+    "living_expenses_json": st.session_state.form_data["living_expenses_json"],
+    "ext_mortgage": ext_mortgage,
+    "ext_car_loan": ext_car_loan,
+    "ext_cc": ext_cc,
+    "ext_other": ext_other,
+    "use_eq": use_equity,
+    "eq_amount": eq_amount,
+    "eq_rate": eq_rate * 100 # Save as percentage
+}
 
-# 2. Render perfectly aligned buttons
 col_save, col_dl = st.columns(2)
 
 with col_save:
     if st.button("💾 Save Property to History", use_container_width=True):
-        save_to_history(property_name, property_url, {
-            "purchase_price": purchase_price,
-            "beds": beds, "baths": baths, "cars": cars,
-            "s1_input": s1_input, 
-            "s1_freq": s1_freq,   
-            "s2_input": s2_input, 
-            "s2_freq": s2_freq,
-            "ownership_split": ownership_split,
-            "growth_rate": growth_rate,
-            "holding_period": holding_period,
-            "living_expenses_json": st.session_state.form_data["living_expenses_json"],
-            "ext_mortgage": ext_mortgage,
-            "ext_car_loan": ext_car_loan,
-            "ext_cc": ext_cc,
-            "ext_other": ext_other
-        })
-        # Use toast so alignment doesn't break
+        save_to_history(property_name, property_url, save_data)
         st.toast("✅ Property successfully saved to history!")
-        # Force rerun so Tab 9 updates instantly without double-clicking
         st.rerun()
 
 with col_dl:
@@ -948,21 +970,6 @@ with col_dl:
         file_name=f"{property_name.replace(' ', '_')}_Summary.pdf",
         mime="application/pdf",
         on_click=save_to_history,
-        use_container_width=True, 
-        args=(property_name, property_url, {
-            "purchase_price": purchase_price,
-            "beds": beds, "baths": baths, "cars": cars,
-            "s1_input": s1_input, 
-            "s1_freq": s1_freq,   
-            "s2_input": s2_input,
-            "s2_freq": s2_freq,
-            "ownership_split": ownership_split,
-            "growth_rate": growth_rate,
-            "holding_period": holding_period,
-            "living_expenses_json": st.session_state.form_data["living_expenses_json"],
-            "ext_mortgage": ext_mortgage,
-            "ext_car_loan": ext_car_loan,
-            "ext_cc": ext_cc,
-            "ext_other": ext_other
-        })
+        args=(property_name, property_url, save_data),
+        use_container_width=True
     )
