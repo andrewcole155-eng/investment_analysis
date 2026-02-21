@@ -747,7 +747,6 @@ def generate_pdf(salary_1_annual, salary_2_annual, total_monthly_living, total_e
     pdf.set_font("helvetica", "", 11)
     pdf.cell(0, 7, f"Configuration: {beds} Bed | {baths} Bath | {cars} Car", new_x="LMARGIN", new_y="NEXT")
     
-    # Link logic restored
     if property_url and property_url.strip() != "" and property_url != "https://www.realestate.com.au/":
         pdf.set_font("helvetica", "U", 9)
         pdf.set_text_color(0, 102, 204) 
@@ -760,7 +759,6 @@ def generate_pdf(salary_1_annual, salary_2_annual, total_monthly_living, total_e
     pdf.row("Inv 1 Take-Home (Annual):", f"${salary_1_annual:,.0f}", "Ownership Split:", f"{ownership_split*100:.0f}% / {(1-ownership_split)*100:.0f}%")
     pdf.row("Inv 2 Take-Home (Annual):", f"${salary_2_annual:,.0f}", "Annual Depreciation:", f"${total_depreciation:,.0f}")
     
-    # Tax Benefit Highlight (Keeping the tax profile relevant)
     pdf.set_font("helvetica", "I", 10)
     pdf.set_text_color(0, 102, 204)
     pdf.cell(0, 7, f"Est. Additional Annual Tax Refund (Gearing): ${total_tax_variance:,.2f}", new_x="LMARGIN", new_y="NEXT")
@@ -773,11 +771,11 @@ def generate_pdf(salary_1_annual, salary_2_annual, total_monthly_living, total_e
     pdf.row("Loan Interest Expense:", f"-${annual_interest:,.0f}", "Net Property Cash Flow:", f"${pre_tax_cashflow:,.2f}")
     pdf.ln(3)
 
-    # --- 4. HOUSEHOLD SERVICEABILITY (MONTHLY) ---
+    # --- 4. MONTHLY HOUSEHOLD SERVICEABILITY ---
     pdf.section_header("Monthly Household Serviceability")
     
     total_household_net_m = (salary_1_annual + salary_2_annual) / 12
-    shaded_rent_m = (monthly_rent * 0.80) # Bank 80% rule
+    shaded_rent_m = (monthly_rent * 0.80)
     new_mortgage_m = monthly_io if loan_type == "Interest Only" else monthly_pi
     
     monthly_inflow = total_household_net_m + shaded_rent_m
@@ -805,45 +803,7 @@ def generate_pdf(salary_1_annual, salary_2_annual, total_monthly_living, total_e
     pdf.set_text_color(0, 0, 0)
     pdf.ln(5)
 
-    # --- 5. WEALTH MILESTONES & GROWTH CHART ---
-    # Property Specifics
-    pdf.row("Annual Rent:", f"${annual_gross_income:,.0f}", "Operating Expenses:", f"-${total_operating_expenses:,.0f}")
-    pdf.row("Loan Interest:", f"-${annual_interest:,.0f}", "Pre-Tax Property CF:", f"${pre_tax_cashflow:,.2f}")
-    pdf.ln(2)
-
-    # Household Serviceability (The New Part)
-    total_household_net_m = (salary_1_annual + salary_2_annual) / 12
-    total_living_expenses_m = total_monthly_living
-    total_debt_commitments_m = total_existing_debt_m
-    
-    # Calculate Monthly Surplus
-    new_mortgage_m = monthly_io if loan_type == "Interest Only" else monthly_pi
-    monthly_inflow = total_household_net_m + (monthly_rent * 0.8) # 80% rent shading
-    monthly_outflow = total_living_expenses_m + total_debt_commitments_m + new_mortgage_m
-    net_monthly_surplus = monthly_inflow - monthly_outflow
-
-    pdf.set_font("helvetica", "B", 10)
-    pdf.cell(0, 7, "Monthly Serviceability Breakdown:", new_x="LMARGIN", new_y="NEXT")
-    pdf.set_font("helvetica", "", 10)
-    
-    pdf.row("Net Household Income:", f"${total_household_net_m:,.2f}", "Existing Debts:", f"-${total_debt_commitments_m:,.2f}")
-    pdf.row("Shaded Rental Income:", f"${(monthly_rent * 0.8):,.2f}", "Living Expenses:", f"-${total_living_expenses_m:,.2f}")
-    pdf.row("New Loan Repayment:", f"-${new_mortgage_m:,.2f}")
-    
-    # Final Surplus Highlight
-    if net_monthly_surplus >= 0:
-        pdf.set_text_color(0, 128, 0)
-        pdf.set_font("helvetica", "B", 11)
-        pdf.cell(0, 10, f"ESTIMATED MONTHLY SURPLUS: ${net_monthly_surplus:,.2f}", align="R", new_x="LMARGIN", new_y="NEXT")
-    else:
-        pdf.set_text_color(200, 0, 0)
-        pdf.set_font("helvetica", "B", 11)
-        pdf.cell(0, 10, f"ESTIMATED MONTHLY DEFICIT: ${abs(net_monthly_surplus):,.2f}", align="R", new_x="LMARGIN", new_y="NEXT")
-    
-    pdf.set_text_color(0, 0, 0) # Reset color
-    pdf.ln(3)
-
-    # --- 6. EXIT STRATEGY & CGT (YEAR 10) ---
+    # --- 5. EXIT STRATEGY & CGT ---
     pdf.section_header(f"Exit Strategy & CGT Projection (Year {holding_period})")
     pdf.row("Est. Sale Price:", f"${future_values[-1]:,.0f}", "Gross Capital Gain:", f"${capital_gain:,.0f}")
     pdf.row("Marginal Tax Rate:", f"{est_marginal_rate*100:.1f}%", "Est. CGT Payable:", f"${cgt_payable:,.0f}")
@@ -851,7 +811,7 @@ def generate_pdf(salary_1_annual, salary_2_annual, total_monthly_living, total_e
     pdf.row("NET PROFIT ON SALE:", f"${net_profit_on_sale:,.0f}")
     pdf.ln(3)
 
-    # --- 7. WEALTH MILESTONES ---
+    # --- 6. WEALTH MILESTONES ---
     pdf.section_header("Projected Wealth Milestones")
     pdf.set_font("helvetica", "B", 9)
     pdf.set_fill_color(240, 240, 240)
@@ -869,40 +829,24 @@ def generate_pdf(salary_1_annual, salary_2_annual, total_monthly_living, total_e
             pdf.cell(80, 7, f"${eq:,.0f}", border=1, align="C", new_x="LMARGIN", new_y="NEXT")
     pdf.ln(5)
 
-    # --- 8. GROWTH CHART (Professional Formatting) ---
+    # --- 7. GROWTH CHART ---
     fig, ax = plt.subplots(figsize=(8, 3.5)) 
-    color_market = "#003366" 
-    color_equity = "#2ca02c"
-    
-    ax.plot(df_chart.index, df_chart["Property Value"], label="Market Value", color=color_market, linewidth=2.5)
-    ax.plot(df_chart.index, df_chart["Equity"], label="Equity Position", color=color_equity, linewidth=2.5)
-    ax.fill_between(df_chart.index, df_chart["Equity"], color=color_equity, alpha=0.1)
-    
-    ax.set_title(f"Equity Projection ({growth_rate*100:.1f}% Annual Growth)", fontsize=12, fontweight='bold', color="#333333", pad=15)
-    
-    formatter = ticker.FuncFormatter(lambda x, pos: f'${x:,.0f}')
-    ax.yaxis.set_major_formatter(formatter)
-    
-    ax.grid(True, axis='y', linestyle="--", alpha=0.5, color="#d3d3d3")
-    ax.grid(False, axis='x')
-    ax.spines['top'].set_visible(False)
-    ax.spines['right'].set_visible(False)
-    ax.spines['left'].set_color('#cccccc')
-    ax.spines['bottom'].set_color('#cccccc')
-    
-    ax.tick_params(axis='both', colors='#666666', labelsize=9)
-    ax.legend(frameon=False, loc="upper left", fontsize=10)
+    ax.plot(df_chart.index, df_chart["Property Value"], label="Market Value", color="#003366", linewidth=2.5)
+    ax.plot(df_chart.index, df_chart["Equity"], label="Equity Position", color="#2ca02c", linewidth=2.5)
+    ax.fill_between(df_chart.index, df_chart["Equity"], color="#2ca02c", alpha=0.1)
+    ax.set_title(f"Equity Projection ({growth_rate*100:.1f}% Annual Growth)", fontsize=12, fontweight='bold')
+    ax.yaxis.set_major_formatter(ticker.FuncFormatter(lambda x, pos: f'${x:,.0f}'))
+    ax.grid(True, axis='y', linestyle="--", alpha=0.5)
+    ax.legend(frameon=False, loc="upper left")
     
     plt.tight_layout()
-    
     img_buffer = io.BytesIO()
     plt.savefig(img_buffer, format="png", bbox_inches="tight", dpi=200) 
     pdf.image(img_buffer, x=15, w=180)
 
     return bytes(pdf.output())
 
-# --- DOWNLOAD BUTTON (Line 890 approx) ---
-# Ensure these four variables are passed to the function
+# --- DOWNLOAD BUTTON ---
 pdf_bytes = generate_pdf(
     salary_1_annual, 
     salary_2_annual, 
