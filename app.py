@@ -79,11 +79,14 @@ if "form_data" not in st.session_state:
         "beds": 2, "baths": 1, "cars": 1,
         "sal1": 150000, "sal2": 150000, "split": 50,
         "growth": 4.0, "hold": 10,
-        "living_expenses_json": json.dumps(DEFAULT_LIVING_EXPENSES_DATA) # Set default expenses
+        "living_expenses_json": json.dumps(DEFAULT_LIVING_EXPENSES_DATA),
+        "ext_mortgage": 0,    # NEW: Existing Mortgage Repayment
+        "ext_car_loan": 0,    # NEW: Car Loans
+        "ext_cc": 0,          # NEW: Credit Cards
+        "ext_other": 0        # NEW: Other Loans
     }
 
 def load_property(row):
-    # This updates the session state which the sidebar inputs then consume
     st.session_state.form_data = {
         "prop_name": row["Property Name"],
         "prop_url": row["Listing URL"],
@@ -98,11 +101,17 @@ def load_property(row):
         "hold": int(row["holding_period"])
     }
     
-    # NEW: Load custom expenses if they exist, otherwise fallback to default
+    # Load custom expenses
     if "living_expenses_json" in row and pd.notna(row["living_expenses_json"]):
         st.session_state.form_data["living_expenses_json"] = row["living_expenses_json"]
     else:
         st.session_state.form_data["living_expenses_json"] = json.dumps(DEFAULT_LIVING_EXPENSES_DATA)
+        
+    # NEW: Load custom debts (using .get() safely for old history items)
+    st.session_state.form_data["ext_mortgage"] = float(row.get("ext_mortgage", 0.0))
+    st.session_state.form_data["ext_car_loan"] = float(row.get("ext_car_loan", 0.0))
+    st.session_state.form_data["ext_cc"] = float(row.get("ext_cc", 0.0))
+    st.session_state.form_data["ext_other"] = float(row.get("ext_other", 0.0))
 
 # --- GEMINI AI YIELD ESTIMATOR ---
 @st.cache_data(ttl=3600, show_spinner=False)
@@ -155,6 +164,15 @@ st.sidebar.subheader("Projections")
 growth_rate_val = st.sidebar.slider("Expected Annual Growth (%)", 0.0, 12.0, st.session_state.form_data["growth"], step=0.5)
 growth_rate = growth_rate_val / 100
 holding_period = st.sidebar.slider("Holding Period (Years)", 1, 30, st.session_state.form_data["hold"])
+
+# --- GLOBAL TAX CALCULATOR ---
+def calculate_tax(income):
+    """Calculates standard Australian income tax (excluding Medicare levy)."""
+    if income <= 18200: return 0
+    elif income <= 45000: return (income - 18200) * 0.16
+    elif income <= 135000: return 4288 + (income - 45000) * 0.30
+    elif income <= 190000: return 31288 + (income - 135000) * 0.37
+    else: return 51638 + (income - 190000) * 0.45
 
 # --- 2. CREATE TABS ---
 # Reordered to put Summary first
@@ -447,15 +465,13 @@ with tab9:
     else:
         st.info("Download a PDF to save to history.")
 
-# --- TAB 10: LIVING EXPENSES ---
+# --- TAB 10: LIVING EXPENSES & SERVICING ---
 with tab10:
     st.subheader("Household Living Expenses (Monthly)")
     st.markdown("Modify the default values or add new rows below. Your custom expenses will be saved with this property search.")
     
-    # Load from session state
     current_expenses = pd.DataFrame(json.loads(st.session_state.form_data["living_expenses_json"]))
     
-    # Interactive data editor
     edited_expenses = st.data_editor(
         current_expenses,
         num_rows="dynamic",
@@ -463,7 +479,6 @@ with tab10:
         column_config={
             "Monthly Amount ($)": st.column_config.NumberColumn(
                 "Monthly Amount ($)",
-                help="Enter the monthly expense in dollars",
                 min_value=0.0,
                 step=10.0,
                 format="$%.2f",
@@ -472,17 +487,67 @@ with tab10:
         key="living_expenses_editor"
     )
     
-    # Calculate totals
     total_monthly_living = edited_expenses["Monthly Amount ($)"].sum()
-    total_annual_living = total_monthly_living * 12
+    st.session_state.form_data["living_expenses_json"] = edited_expenses.to_json(orient="records")
+
+    st.divider()
+    
+    # --- NEW: EXISTING DEBT COMMITMENTS ---
+    st.subheader("💳 Existing Debt Commitments (Monthly)")
+    d1, d2, d3, d4 = st.columns(4)
+    ext_mortgage = d1.number_input("Existing Mortgage(s) ($)", value=st.session_state.form_data["ext_mortgage"], step=100.0)
+    ext_car_loan = d2.number_input("Car Loan(s) ($)", value=st.session_state.form_data["ext_car_loan"], step=50.0)
+    ext_cc = d3.number_input("Credit Card Payments ($)", value=st.session_state.form_data["ext_cc"], step=50.0, help="Typically assessed at 3-4% of total limit")
+    ext_other = d4.number_input("Other Loans ($)", value=st.session_state.form_data["ext_other"], step=50.0)
+    
+    total_existing_debt_m = ext_mortgage + ext_car_loan + ext_cc + ext_other
     
     st.divider()
-    le_col1, le_col2 = st.columns(2)
-    le_col1.metric("Total Monthly Living Expenses", f"${total_monthly_living:,.2f}")
-    le_col2.metric("Total Annual Living Expenses", f"${total_annual_living:,.2f}")
     
-    # Save back to session state so it's ready for download/history saving
-    st.session_state.form_data["living_expenses_json"] = edited_expenses.to_json(orient="records")
+    # --- NEW: SERVICING OVERVIEW ---
+    st.subheader("⚖️ Monthly Serviceability Overview")
+    st.markdown("A high-level view of household cash flow combining standard salaries, proposed rental income, and all debt obligations.")
+    
+    # 1. Calculate Net Monthly Income
+    net_salary_1 = salary_1 - calculate_tax(salary_1)
+    net_salary_2 = salary_2 - calculate_tax(salary_2)
+    total_net_income_m = (net_salary_1 + net_salary_2) / 12
+    
+    # 2. Bank Rental Shading (Banks usually only accept 80% of rental income to buffer for vacancies)
+    shaded_rent_m = monthly_rent * 0.80
+    
+    # 3. Define the New Mortgage Payment
+    new_mortgage_m = monthly_io if loan_type == "Interest Only" else monthly_pi
+    
+    # 4. Calculate Final Cash Flow Position
+    total_income_m = total_net_income_m + shaded_rent_m
+    total_commitments_m = total_monthly_living + total_existing_debt_m + new_mortgage_m
+    monthly_surplus = total_income_m - total_commitments_m
+    
+    # Display the breakdown cleanly
+    srv1, srv2 = st.columns([1, 1])
+    
+    with srv1:
+        st.write("**INFLOWS**")
+        st.write(f"Net Household Salary: **${total_net_income_m:,.2f}**")
+        st.write(f"Proposed Rent (80% Bank Shade): **${shaded_rent_m:,.2f}**")
+        st.markdown(f"### Total Usable Income: <span style='color:#00cc96'>${total_income_m:,.2f}</span>", unsafe_allow_html=True)
+        
+    with srv2:
+        st.write("**OUTFLOWS**")
+        st.write(f"Living Expenses: **${total_monthly_living:,.2f}**")
+        st.write(f"Existing Debts/Mortgages: **${total_existing_debt_m:,.2f}**")
+        st.write(f"NEW Property Mortgage: **${new_mortgage_m:,.2f}**")
+        st.markdown(f"### Total Commitments: <span style='color:#ff4b4b'>${total_commitments_m:,.2f}</span>", unsafe_allow_html=True)
+        
+    st.divider()
+    
+    # Final Metric Highlight
+    st.write("### Estimated Monthly Surplus / Deficit")
+    if monthly_surplus >= 0:
+        st.success(f"You have an estimated household surplus of **${monthly_surplus:,.2f} per month** after all commitments and taxes.")
+    else:
+        st.error(f"Warning: You have an estimated household deficit of **${abs(monthly_surplus):,.2f} per month**. Lenders may reject this application without further income.")
 
 # --- PDF GENERATION LOGIC ---
 st.markdown("---")
@@ -674,6 +739,10 @@ st.download_button(
         "ownership_split": ownership_split,
         "growth_rate": growth_rate,
         "holding_period": holding_period,
-        "living_expenses_json": st.session_state.form_data["living_expenses_json"] # NEW: Pass expenses to history
+        "living_expenses_json": st.session_state.form_data["living_expenses_json"],
+        "ext_mortgage": ext_mortgage, # NEW
+        "ext_car_loan": ext_car_loan, # NEW
+        "ext_cc": ext_cc,             # NEW
+        "ext_other": ext_other        # NEW
     })
 )
