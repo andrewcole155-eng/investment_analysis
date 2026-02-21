@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import numpy_financial as npf
+from fpdf import FPDF
 
 # --- PAGE SETUP ---
 st.set_page_config(page_title="Investment Analysis", layout="wide")
@@ -160,3 +161,57 @@ with tab6:
     # Show data table
     st.write("Detailed Breakdown")
     st.dataframe(df_chart.style.format("${:,.0f}"))
+
+# --- PDF GENERATION LOGIC ---
+st.markdown("---")
+st.subheader("📄 Export Analysis")
+
+def generate_pdf():
+    pdf = FPDF()
+    pdf.add_page()
+    
+    # Title
+    pdf.set_font("helvetica", "B", 18)
+    pdf.cell(0, 15, "Property Investment Analysis Report", ln=True, align="C")
+    pdf.ln(5)
+    
+    # Section 1: Property Details
+    pdf.set_font("helvetica", "B", 14)
+    pdf.cell(0, 10, "1. Acquisition Summary", ln=True)
+    pdf.set_font("helvetica", "", 12)
+    pdf.cell(0, 8, f"Purchase Price: ${purchase_price:,.0f}", ln=True)
+    pdf.cell(0, 8, f"Total Acquisition Costs: ${total_acquisition_costs:,.0f}", ln=True)
+    pdf.cell(0, 8, f"Total Required: ${total_cost_base:,.0f}", ln=True)
+    pdf.ln(5)
+    
+    # Section 2: Cash Flow
+    pdf.set_font("helvetica", "B", 14)
+    pdf.cell(0, 10, "2. Annual Cash Flow & Tax", ln=True)
+    pdf.set_font("helvetica", "", 12)
+    pdf.cell(0, 8, f"Gross Annual Income: ${annual_gross_income:,.0f}", ln=True)
+    pdf.cell(0, 8, f"Total Operating Expenses: ${total_operating_expenses:,.0f}", ln=True)
+    pdf.cell(0, 8, f"Annual Repayment: ${annual_repayment:,.0f}", ln=True)
+    pdf.cell(0, 8, f"Net Post-Tax Cash Flow: ${post_tax_cashflow:,.0f}", ln=True)
+    pdf.ln(5)
+    
+    # Section 3: 10-Year Projections
+    pdf.set_font("helvetica", "B", 14)
+    pdf.cell(0, 10, "3. 10-Year Growth Forecast", ln=True)
+    pdf.set_font("helvetica", "", 12)
+    # Grab the 10th-year value from our previously calculated lists
+    future_val_10 = future_values[-1]
+    equity_10 = equity[-1]
+    pdf.cell(0, 8, f"Estimated Property Value (Year 10): ${future_val_10:,.0f}", ln=True)
+    pdf.cell(0, 8, f"Estimated Equity (Year 10): ${equity_10:,.0f}", ln=True)
+    
+    # Return as bytes so Streamlit can download it
+    return bytes(pdf.output())
+
+# Create the Download Button
+pdf_bytes = generate_pdf()
+st.download_button(
+    label="⬇️ Download PDF Report",
+    data=pdf_bytes,
+    file_name="Investment_Report.pdf",
+    mime="application/pdf"
+)
