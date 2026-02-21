@@ -5,4 +5,3 @@ numpy-financial
 fpdf2
 matplotlib
 google-generativeai
-json

@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
 import io
 import os
-import json # NEW: Required for saving the expense table
+import json
 from datetime import datetime
 import google.generativeai as genai
 
