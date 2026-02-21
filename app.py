@@ -3,6 +3,9 @@ import pandas as pd
 import numpy as np
 import numpy_financial as npf
 from fpdf import FPDF
+import matplotlib.pyplot as plt
+import io
+import os
 
 # --- PAGE SETUP ---
 st.set_page_config(page_title="Investment Analysis", layout="wide")
@@ -164,54 +167,98 @@ with tab6:
 
 # --- PDF GENERATION LOGIC ---
 st.markdown("---")
-st.subheader("📄 Export Analysis")
+st.subheader("📄 Export Analysis Report")
 
 def generate_pdf():
-    pdf = FPDF()
+    # 1. Create a custom PDF class for Header/Footer & Styling
+    class InvestmentReportPDF(FPDF):
+        def header(self):
+            # Include your AQI Logo
+            logo_path = "/home/andrew/.ssh/Trading/_MelbInvestments/AQI_Logo.png"
+            if os.path.exists(logo_path):
+                self.image(logo_path, 10, 8, 30) # x, y, width
+            
+            # Header Text
+            self.set_font("helvetica", "B", 20)
+            self.set_text_color(0, 51, 102) # Dark blue
+            self.cell(40) # Push text to the right of the logo
+            self.cell(0, 15, "Property Investment Analysis", ln=True, align="L")
+            self.ln(10)
+
+        def footer(self):
+            self.set_y(-15)
+            self.set_font("helvetica", "I", 8)
+            self.set_text_color(128, 128, 128)
+            self.cell(0, 10, f"Page {self.page_no()}", align="C")
+
+        def section_header(self, title):
+            self.set_font("helvetica", "B", 14)
+            self.set_fill_color(230, 240, 255) # Light blue background
+            self.set_text_color(0, 0, 0)
+            self.cell(0, 10, f"  {title}", ln=True, fill=True)
+            self.ln(3)
+
+        def row(self, label, value):
+            self.set_font("helvetica", "", 12)
+            self.cell(90, 8, label, border=0)
+            self.set_font("helvetica", "B", 12)
+            self.cell(0, 8, value, ln=True, border=0)
+
+    # 2. Initialize PDF
+    pdf = InvestmentReportPDF()
     pdf.add_page()
     
-    # Title
-    pdf.set_font("helvetica", "B", 18)
-    pdf.cell(0, 15, "Property Investment Analysis Report", ln=True, align="C")
+    # 3. Section 1: Acquisition
+    pdf.section_header("1. Acquisition & Capital Required")
+    pdf.row("Purchase Price:", f"${purchase_price:,.0f}")
+    pdf.row("Total Entry Costs (Stamp Duty, etc.):", f"${total_acquisition_costs:,.0f}")
+    pdf.row("Total Funds Required:", f"${total_cost_base:,.0f}")
     pdf.ln(5)
     
-    # Section 1: Property Details
-    pdf.set_font("helvetica", "B", 14)
-    pdf.cell(0, 10, "1. Acquisition Summary", ln=True)
-    pdf.set_font("helvetica", "", 12)
-    pdf.cell(0, 8, f"Purchase Price: ${purchase_price:,.0f}", ln=True)
-    pdf.cell(0, 8, f"Total Acquisition Costs: ${total_acquisition_costs:,.0f}", ln=True)
-    pdf.cell(0, 8, f"Total Required: ${total_cost_base:,.0f}", ln=True)
+    # 4. Section 2: Cash Flow & Tax
+    pdf.section_header("2. Annual Cash Flow & Tax Impact")
+    pdf.row("Gross Annual Income:", f"${annual_gross_income:,.0f}")
+    pdf.row("Total Operating Expenses:", f"${total_operating_expenses:,.0f}")
+    pdf.row("Annual Debt Servicing:", f"${annual_repayment:,.0f}")
+    pdf.row("Net Post-Tax Cash Flow:", f"${post_tax_cashflow:,.0f}")
     pdf.ln(5)
     
-    # Section 2: Cash Flow
-    pdf.set_font("helvetica", "B", 14)
-    pdf.cell(0, 10, "2. Annual Cash Flow & Tax", ln=True)
-    pdf.set_font("helvetica", "", 12)
-    pdf.cell(0, 8, f"Gross Annual Income: ${annual_gross_income:,.0f}", ln=True)
-    pdf.cell(0, 8, f"Total Operating Expenses: ${total_operating_expenses:,.0f}", ln=True)
-    pdf.cell(0, 8, f"Annual Repayment: ${annual_repayment:,.0f}", ln=True)
-    pdf.cell(0, 8, f"Net Post-Tax Cash Flow: ${post_tax_cashflow:,.0f}", ln=True)
+    # 5. Section 3: Projections
+    pdf.section_header("3. 10-Year Wealth Forecast")
+    pdf.row("Estimated Property Value (Year 10):", f"${future_values[-1]:,.0f}")
+    pdf.row("Estimated Equity (Year 10):", f"${equity[-1]:,.0f}")
     pdf.ln(5)
+
+    # 6. Generate the Matplotlib Chart for the PDF
+    fig, ax = plt.subplots(figsize=(8, 4))
+    ax.plot(df_chart.index, df_chart["Property Value"], label="Property Value", color="#1f77b4", linewidth=2)
+    ax.plot(df_chart.index, df_chart["Equity"], label="Equity", color="#2ca02c", linewidth=2)
     
-    # Section 3: 10-Year Projections
-    pdf.set_font("helvetica", "B", 14)
-    pdf.cell(0, 10, "3. 10-Year Growth Forecast", ln=True)
-    pdf.set_font("helvetica", "", 12)
-    # Grab the 10th-year value from our previously calculated lists
-    future_val_10 = future_values[-1]
-    equity_10 = equity[-1]
-    pdf.cell(0, 8, f"Estimated Property Value (Year 10): ${future_val_10:,.0f}", ln=True)
-    pdf.cell(0, 8, f"Estimated Equity (Year 10): ${equity_10:,.0f}", ln=True)
+    # Chart Styling
+    ax.set_title("10-Year Growth & Equity Accumulation", fontsize=14, pad=10)
+    ax.set_xlabel("Holding Year", fontsize=10)
+    ax.set_ylabel("Value ($)", fontsize=10)
+    ax.grid(True, linestyle="--", alpha=0.6)
+    ax.legend(loc="upper left")
     
-    # Return as bytes so Streamlit can download it
+    # Format Y-axis to show dollar values nicely
+    ax.get_yaxis().set_major_formatter(plt.FuncFormatter(lambda x, loc: "{:,}".format(int(x))))
+    
+    # Save chart to a temporary buffer in memory
+    img_buffer = io.BytesIO()
+    plt.savefig(img_buffer, format="png", bbox_inches="tight", dpi=150)
+    img_buffer.seek(0)
+    
+    # 7. Inject Chart into FPDF
+    pdf.image(img_buffer, x=15, w=180)
+
     return bytes(pdf.output())
 
-# Create the Download Button
+# --- DOWNLOAD BUTTON ---
 pdf_bytes = generate_pdf()
 st.download_button(
-    label="⬇️ Download PDF Report",
+    label="⬇️ Download Professional PDF Report",
     data=pdf_bytes,
-    file_name="Investment_Report.pdf",
+    file_name="AQI_Investment_Report.pdf",
     mime="application/pdf"
 )
