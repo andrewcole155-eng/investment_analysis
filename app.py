@@ -229,11 +229,11 @@ s2_freq = col_s2_freq.selectbox(
 # --- Mapping for annualization ---
 freq_map = {"Monthly": 12, "Fortnightly": 26, "Annually": 1}
 
-# Use these exact variable names
-salary_1_annual = s1_input * freq_map[s1_freq]
-salary_2_annual = s2_input * freq_map[s2_freq]
+# These must be the final annual take-home figures
+salary_1_annual = float(s1_input * freq_map[s1_freq])
+salary_2_annual = float(s2_input * freq_map[s2_freq])
 
-# Define these for existing Tab logic
+# Define aliases for other tabs to ensure consistency
 salary_1 = salary_1_annual
 salary_2 = salary_2_annual
 annual_net_1 = salary_1_annual 
@@ -696,7 +696,7 @@ st.markdown("---")
 st.subheader("📄 Export Analysis Report")
 
 def generate_pdf(salary_1_annual, salary_2_annual, total_monthly_living, total_existing_debt_m):
-    # Fetch AI Market Yield Data
+    # 1. Fetch AI Market Yield Data
     market_yield = fetch_market_yield(property_name, beds, baths, cars)
     property_yield = (annual_gross_income / purchase_price) * 100
 
@@ -741,12 +741,11 @@ def generate_pdf(salary_1_annual, salary_2_annual, total_monthly_living, total_e
     pdf = InvestmentReportPDF()
     pdf.add_page()
     
-    # --- HEADER & RESTORED LINK ---
+    # --- HEADER ---
     pdf.set_font("helvetica", "B", 16)
     pdf.cell(0, 8, property_name, new_x="LMARGIN", new_y="NEXT")
     pdf.set_font("helvetica", "", 11)
     pdf.cell(0, 7, f"Configuration: {beds} Bed | {baths} Bath | {cars} Car", new_x="LMARGIN", new_y="NEXT")
-    
     if property_url and property_url.strip() != "" and property_url != "https://www.realestate.com.au/":
         pdf.set_font("helvetica", "U", 9)
         pdf.set_text_color(0, 102, 204) 
@@ -780,8 +779,6 @@ def generate_pdf(salary_1_annual, salary_2_annual, total_monthly_living, total_e
     pdf.section_header("3. Property Performance (Annual Pre-Tax)")
     pdf.row("Gross Annual Rent:", f"${annual_gross_income:,.0f}", "Operating Expenses:", f"-${total_operating_expenses:,.0f}")
     pdf.row("Loan Interest Expense:", f"-${annual_interest:,.0f}", "Net Property Cash Flow:", f"${pre_tax_cashflow:,.2f}")
-    
-    # Negative Gearing Highlight
     pdf.set_font("helvetica", "I", 10)
     pdf.set_text_color(0, 102, 204)
     pdf.cell(0, 7, f"Est. Additional Annual Tax Refund (Gearing): ${total_tax_variance:,.2f}", new_x="LMARGIN", new_y="NEXT")
@@ -790,13 +787,11 @@ def generate_pdf(salary_1_annual, salary_2_annual, total_monthly_living, total_e
 
     # --- 4. MONTHLY HOUSEHOLD SERVICEABILITY (FIXED MATH) ---
     pdf.section_header("4. Monthly Household Serviceability")
-    
-    # Strict monthly conversion to prevent hallucinations
+    # Take-Home salaries passed in are already annual totals, we only divide by 12 once.
     total_household_net_m = (salary_1_annual + salary_2_annual) / 12
     shaded_rent_m = (monthly_rent * 0.80) 
     new_mortgage_m = monthly_io if loan_type == "Interest Only" else monthly_pi
     
-    # Final surplus calculation
     monthly_inflow = total_household_net_m + shaded_rent_m
     monthly_outflow = total_monthly_living + total_existing_debt_m + new_mortgage_m
     net_monthly_surplus = monthly_inflow - monthly_outflow
@@ -804,7 +799,6 @@ def generate_pdf(salary_1_annual, salary_2_annual, total_monthly_living, total_e
     pdf.set_font("helvetica", "B", 10)
     pdf.cell(0, 7, "Serviceability Breakdown (Monthly):", new_x="LMARGIN", new_y="NEXT")
     pdf.set_font("helvetica", "", 10)
-    
     pdf.row("Take-Home Pay:", f"${total_household_net_m:,.2f}", "Living Expenses:", f"-${total_monthly_living:,.2f}")
     pdf.row("Rental Income (80%):", f"${shaded_rent_m:,.2f}", "Existing Debts:", f"-${total_existing_debt_m:,.2f}")
     pdf.row("New Property Loan:", f"-${new_mortgage_m:,.2f}")
@@ -818,7 +812,6 @@ def generate_pdf(salary_1_annual, salary_2_annual, total_monthly_living, total_e
         pdf.set_text_color(200, 0, 0)
         pdf.set_font("helvetica", "B", 12)
         pdf.cell(0, 10, f"ESTIMATED MONTHLY DEFICIT: ${abs(net_monthly_surplus):,.2f}", align="R", new_x="LMARGIN", new_y="NEXT")
-    
     pdf.set_text_color(0, 0, 0)
     pdf.ln(5)
 
@@ -847,19 +840,16 @@ def generate_pdf(salary_1_annual, salary_2_annual, total_monthly_living, total_e
             pdf.cell(80, 7, f"${val:,.0f}", border=1, align="C")
             pdf.cell(80, 7, f"${eq:,.0f}", border=1, align="C", new_x="LMARGIN", new_y="NEXT")
     
-    # --- CHARTS ---
+    # --- PAGE 2: RESTORED CHARTS ---
     pdf.section_header("7. Equity & Value Projections")
-    
     fig, ax = plt.subplots(figsize=(8, 4.5)) 
     ax.plot(df_chart.index, df_chart["Property Value"], label="Market Value", color="#003366", linewidth=2.5)
     ax.plot(df_chart.index, df_chart["Equity"], label="Equity Position", color="#2ca02c", linewidth=2.5)
     ax.fill_between(df_chart.index, df_chart["Equity"], color="#2ca02c", alpha=0.1)
-    
     ax.set_title(f"Equity Projection ({growth_rate*100:.1f}% Annual Growth)", fontsize=12, fontweight='bold', pad=15)
     ax.yaxis.set_major_formatter(ticker.FuncFormatter(lambda x, pos: f'${x:,.0f}'))
     ax.grid(True, axis='y', linestyle="--", alpha=0.5)
     ax.legend(frameon=False, loc="upper left")
-    
     plt.tight_layout()
     img_buffer = io.BytesIO()
     plt.savefig(img_buffer, format="png", bbox_inches="tight", dpi=200) 
