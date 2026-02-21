@@ -343,21 +343,21 @@ def generate_pdf():
             self.cell(0, 10, f"Page {self.page_no()}", align="C")
 
         def section_header(self, title):
-            self.set_font("helvetica", "B", 14)
+            self.set_font("helvetica", "B", 13)
             self.set_fill_color(230, 240, 255)
             self.set_text_color(0, 0, 0)
             self.cell(0, 10, f"  {title}", ln=True, fill=True)
-            self.ln(3)
+            self.ln(2)
 
         def row(self, label, value, label2="", value2=""):
-            self.set_font("helvetica", "", 11)
+            self.set_font("helvetica", "", 10)
             self.cell(50, 7, label, border=0)
-            self.set_font("helvetica", "B", 11)
+            self.set_font("helvetica", "B", 10)
             self.cell(45, 7, str(value), border=0)
             if label2:
-                self.set_font("helvetica", "", 11)
+                self.set_font("helvetica", "", 10)
                 self.cell(50, 7, label2, border=0)
-                self.set_font("helvetica", "B", 11)
+                self.set_font("helvetica", "B", 10)
                 self.cell(0, 7, str(value2), ln=True, border=0)
             else:
                 self.ln(7)
@@ -365,88 +365,84 @@ def generate_pdf():
     pdf = InvestmentReportPDF()
     pdf.add_page()
     
-    # --- 1. PROPERTY OVERVIEW ---
+    # --- 1. PROPERTY HEADER ---
     pdf.set_font("helvetica", "B", 16)
     pdf.cell(0, 8, property_name, ln=True)
-    pdf.set_font("helvetica", "", 12)
-    pdf.cell(0, 8, f"Configuration: {beds} Bed | {baths} Bath | {cars} Car", ln=True)
+    pdf.set_font("helvetica", "", 11)
+    pdf.cell(0, 7, f"Configuration: {beds} Bed | {baths} Bath | {cars} Car", ln=True)
     
     if property_url and property_url.strip() != "" and property_url != "https://www.realestate.com.au/":
-        pdf.set_font("helvetica", "U", 10)
+        pdf.set_font("helvetica", "U", 9)
         pdf.set_text_color(0, 102, 204) 
         pdf.cell(0, 6, "View Listing Online", ln=True, link=property_url)
         pdf.set_text_color(0, 0, 0) 
-    
-    pdf.set_font("helvetica", "I", 9)
-    pdf.set_text_color(100, 100, 100)
-    pdf.cell(0, 6, f"Report Date: {datetime.now().strftime('%d %B %Y')}", ln=True)
-    pdf.ln(5)
-    pdf.set_text_color(0, 0, 0)
+    pdf.ln(3)
 
-    # --- 2. ACQUISITION & INVESTMENT ---
+    # --- 2. ACQUISITION & FINANCE ---
     cash_outlay = total_cost_base - loan_amount
-    pdf.section_header("Acquisition & Investment")
+    pdf.section_header("Acquisition & Finance")
     pdf.row("Purchase Price:", f"${purchase_price:,.0f}", "Loan Amount:", f"${loan_amount:,.0f}")
-    pdf.row("Total Entry Costs:", f"${total_acquisition_costs:,.0f}", "LVR:", f"{lvr_pct*100:.0f}%")
-    pdf.set_font("helvetica", "B", 11)
-    pdf.row("TOTAL CASH OUTLAY:", f"${cash_outlay:,.0f}")
-    pdf.ln(5)
+    pdf.row("Interest Rate:", f"{interest_rate*100:.2f}%", "Loan Type:", f"{loan_type}")
+    pdf.row("Total Entry Costs:", f"${total_acquisition_costs:,.0f}", "Total Cash Outlay:", f"${cash_outlay:,.0f}")
+    pdf.ln(3)
 
-    # --- 3. ANNUAL EXPENSES (THE "DASHBOARD" BREAKDOWN) ---
-    vacancy_loss = (monthly_rent * 12) * (vacancy_pct / 100)
-    pdf.section_header("Annual Operating Expenses")
-    pdf.row("Property Management:", f"${mgt_fee_m*12:,.0f}", "Strata/Body Corp:", f"${strata_m*12:,.0f}")
-    pdf.row("Council Rates:", f"${rates_m*12:,.0f}", "Insurance:", f"${insurance_m*12:,.0f}")
-    pdf.row("Maintenance:", f"${maint_m*12:,.0f}", "Vacancy Loss:", f"${vacancy_loss:,.0f}")
-    pdf.set_font("helvetica", "B", 11)
-    pdf.row("TOTAL OP. EXPENSES:", f"${total_operating_expenses:,.0f}")
-    pdf.ln(5)
+    # --- 3. HOUSEHOLD TAX PROFILE ---
+    pdf.section_header("Household Tax Profile")
+    pdf.row("Investor 1 Salary:", f"${salary_1:,.0f}", "Ownership Split:", f"{ownership_split*100:.0f}% / {(1-ownership_split)*100:.0f}%")
+    pdf.row("Investor 2 Salary:", f"${salary_2:,.0f}", "Annual Depreciation:", f"${total_depreciation:,.0f}")
+    pdf.ln(3)
 
-    # --- 4. RETURNS & CASH FLOW ---
-    cash_on_cash = (post_tax_cashflow / cash_outlay) * 100 if cash_outlay > 0 else 0
-    pdf.section_header("Returns & Cash Flow Analysis")
-    pdf.row("Gross Yield:", f"{(annual_gross_income/purchase_price)*100:.2f}%", "Cash-on-Cash Return:", f"{cash_on_cash:.2f}%")
-    pdf.row("Annual Pre-Tax CF:", f"${pre_tax_cashflow:,.0f}", "Weekly Pre-Tax:", f"${pre_tax_cashflow/52:,.2f}")
-    pdf.row("Annual Post-Tax CF:", f"${post_tax_cashflow:,.0f}", "Weekly Post-Tax:", f"${post_tax_cashflow/52:,.2f}")
-    pdf.row("Tax Refund/Payable:", f"${total_tax_variance:,.0f}")
-    pdf.ln(5)
-
-    # --- 5. WEALTH MILESTONES (YEAR 1, 3, 5, 10) ---
-    pdf.section_header("Projected Wealth Milestones")
-    pdf.set_font("helvetica", "B", 10)
-    pdf.set_fill_color(240, 240, 240)
-    pdf.cell(30, 8, "Period", border=1, align="C", fill=True)
-    pdf.cell(80, 8, "Property Value", border=1, align="C", fill=True)
-    pdf.cell(80, 8, "Estimated Equity", border=1, align="C", ln=True, fill=True)
+    # --- 4. CASH FLOW & GEARING ---
+    pdf.section_header("Cash Flow & Negative Gearing Impact")
+    pdf.row("Annual Rent:", f"${annual_gross_income:,.0f}", "Operating Expenses:", f"-${total_operating_expenses:,.0f}")
+    pdf.row("Loan Interest:", f"-${annual_interest:,.0f}", "Pre-Tax Cash Flow:", f"${pre_tax_cashflow:,.0f}")
     
-    pdf.set_font("helvetica", "", 10)
+    pdf.set_font("helvetica", "B", 10)
+    pdf.set_text_color(0, 128, 0) if total_tax_variance > 0 else pdf.set_text_color(200, 0, 0)
+    pdf.row("Est. Tax Refund/Benefit:", f"${total_tax_variance:,.0f}", "Post-Tax Cash Flow:", f"${post_tax_cashflow:,.0f}")
+    pdf.set_text_color(0, 0, 0)
+    
+    pdf.set_font("helvetica", "I", 10)
+    pdf.cell(0, 7, f"Net Weekly Household Impact: ${post_tax_cashflow/52:,.2f} per week", ln=True)
+    pdf.ln(3)
+
+    # --- 5. EXIT STRATEGY & CGT (YEAR 10) ---
+    pdf.section_header(f"Exit Strategy & CGT Projection (Year {holding_period})")
+    pdf.row("Est. Sale Price:", f"${future_values[-1]:,.0f}", "Gross Capital Gain:", f"${capital_gain:,.0f}")
+    pdf.row("Marginal Tax Rate:", f"{est_marginal_rate*100:.1f}%", "Est. CGT Payable:", f"${cgt_payable:,.0f}")
+    pdf.set_font("helvetica", "B", 10)
+    pdf.row("NET PROFIT ON SALE:", f"${net_profit_on_sale:,.0f}")
+    pdf.ln(3)
+
+    # --- 6. WEALTH MILESTONES ---
+    pdf.section_header("Projected Wealth Milestones")
+    pdf.set_font("helvetica", "B", 9)
+    pdf.set_fill_color(240, 240, 240)
+    pdf.cell(30, 7, "Year", border=1, align="C", fill=True)
+    pdf.cell(80, 7, "Estimated Value", border=1, align="C", fill=True)
+    pdf.cell(80, 7, "Estimated Equity", border=1, align="C", ln=True, fill=True)
+    
+    pdf.set_font("helvetica", "", 9)
     for yr in [1, 3, 5, 10]:
         if yr <= holding_period:
             val = purchase_price * (1 + growth_rate)**yr
             eq = val - loan_amount
-            pdf.cell(30, 8, f"Year {yr}", border=1, align="C")
-            pdf.cell(80, 8, f"${val:,.0f}", border=1, align="C")
-            pdf.cell(80, 8, f"${eq:,.0f}", border=1, align="C", ln=True)
+            pdf.cell(30, 7, f"Year {yr}", border=1, align="C")
+            pdf.cell(80, 7, f"${val:,.0f}", border=1, align="C")
+            pdf.cell(80, 7, f"${eq:,.0f}", border=1, align="C", ln=True)
     pdf.ln(5)
 
-    # --- 6. CHART ---
-    fig, ax = plt.subplots(figsize=(8, 3.5))
+    # --- 7. GROWTH CHART ---
+    fig, ax = plt.subplots(figsize=(8, 3.0))
     ax.plot(df_chart.index, df_chart["Property Value"], label="Market Value", color="#1f77b4", linewidth=2)
     ax.plot(df_chart.index, df_chart["Equity"], label="Equity Position", color="#2ca02c", linewidth=2)
-    ax.set_title(f"{holding_period}-Year Equity Projection")
+    ax.set_title(f"Equity Projection ({growth_rate*100:.1f}% Annual Growth)")
     ax.grid(True, linestyle="--", alpha=0.5)
     ax.legend()
     
     img_buffer = io.BytesIO()
     plt.savefig(img_buffer, format="png", bbox_inches="tight", dpi=150)
     pdf.image(img_buffer, x=15, w=180)
-
-    # --- 7. FOOTER DISCLAIMER ---
-    pdf.set_y(-25)
-    pdf.set_font("helvetica", "I", 8)
-    pdf.set_text_color(150, 150, 150)
-    disclaimer = "DISCLAIMER: This report is a financial projection based on provided data. It does not constitute formal financial advice. Market conditions can change."
-    pdf.multi_cell(0, 4, disclaimer, align="C")
 
     return bytes(pdf.output())
 
