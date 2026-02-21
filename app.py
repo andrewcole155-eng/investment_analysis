@@ -92,15 +92,18 @@ if "form_data" not in st.session_state:
         "ext_mortgage": 2921.0, "ext_car_loan": 0.0, "ext_cc": 0.0, "ext_other": 0.0
     }
 
-# --- 2. LOAD PROPERTY FUNCTION (ENFORCING FLOATS & RAW DATA) ---
+# --- 2. LOAD PROPERTY FUNCTION (FIXED SIDEBAR SYNC) ---
 def load_property(row):
+    # 1. Update the 'Source of Truth' dictionary
     st.session_state.form_data = {
         "prop_name": row["Property Name"],
         "prop_url": row["Listing URL"],
         "price": float(row["purchase_price"]),
-        "beds": int(row["beds"]), "baths": int(row["baths"]), "cars": int(row["cars"]),
-        "s1_input": float(row.get("s1_input", 3850.0)), # LOADING RAW INPUT
-        "s1_freq": row.get("s1_freq", "Fortnightly"),   # LOADING RAW FREQ
+        "beds": int(row["beds"]),
+        "baths": int(row["baths"]),
+        "cars": int(row["cars"]),
+        "s1_input": float(row.get("s1_input", 3850.0)),
+        "s1_freq": row.get("s1_freq", "Fortnightly"),
         "s2_input": float(row.get("s2_input", 8500.0)),
         "s2_freq": row.get("s2_freq", "Monthly"),
         "split": int(row.get("ownership_split", 0.5) * 100),
@@ -113,17 +116,23 @@ def load_property(row):
         "ext_other": float(row.get("ext_other", 0.0))
     }
 
-    widget_keys = [
-        "sb_prop_name", "sb_prop_url", "sb_price", "sb_beds", 
-        "sb_baths", "sb_cars", "salary_input_1", "salary_input_2",
-        "s1_freq_selector", "s2_freq_selector",
-        "sb_ext_mortgage", "sb_ext_car_loan", "sb_ext_cc", "sb_ext_other" 
-    ]
-    
-    for key in widget_keys:
-        if key in st.session_state:
-            del st.session_state[key]
+    # 2. FORCE UPDATE: Inject data directly into widget keys to update the Sidebar
+    st.session_state["sb_prop_name"] = st.session_state.form_data["prop_name"]
+    st.session_state["sb_prop_url"] = st.session_state.form_data["prop_url"]
+    st.session_state["sb_price"] = st.session_state.form_data["price"]
+    st.session_state["sb_beds"] = st.session_state.form_data["beds"]
+    st.session_state["sb_baths"] = st.session_state.form_data["baths"]
+    st.session_state["sb_cars"] = st.session_state.form_data["cars"]
+    st.session_state["salary_input_1"] = st.session_state.form_data["s1_input"]
+    st.session_state["s1_freq_selector"] = st.session_state.form_data["s1_freq"]
+    st.session_state["salary_input_2"] = st.session_state.form_data["s2_input"]
+    st.session_state["s2_freq_selector"] = st.session_state.form_data["s2_freq"]
+    st.session_state["sb_ext_mortgage"] = st.session_state.form_data["ext_mortgage"]
+    st.session_state["sb_ext_car_loan"] = st.session_state.form_data["ext_car_loan"]
+    st.session_state["sb_ext_cc"] = st.session_state.form_data["ext_cc"]
+    st.session_state["sb_ext_other"] = st.session_state.form_data["ext_other"]
             
+    # 3. Rerun to instantly show the changes
     st.rerun()
 
 # --- GEMINI AI YIELD ESTIMATOR ---
@@ -890,7 +899,7 @@ def generate_pdf(salary_1_annual, salary_2_annual, total_monthly_living, total_e
 st.markdown("---")
 st.subheader("📄 Export Analysis Report")
 
-# 1. Generate PDF BEFORE creating UI columns to prevent layout artifacts
+# 1. Generate PDF outside of columns to prevent UI artifacts
 pdf_bytes = generate_pdf(
     salary_1_annual, 
     salary_2_annual, 
@@ -898,7 +907,7 @@ pdf_bytes = generate_pdf(
     total_existing_debt_m
 )
 
-# 2. Create perfectly aligned columns
+# 2. Render perfectly aligned buttons
 col_save, col_dl = st.columns(2)
 
 with col_save:
@@ -906,8 +915,8 @@ with col_save:
         save_to_history(property_name, property_url, {
             "purchase_price": purchase_price,
             "beds": beds, "baths": baths, "cars": cars,
-            "s1_input": s1_input, # Save raw input
-            "s1_freq": s1_freq,   # Save raw freq
+            "s1_input": s1_input, 
+            "s1_freq": s1_freq,   
             "s2_input": s2_input, 
             "s2_freq": s2_freq,
             "ownership_split": ownership_split,
@@ -919,9 +928,9 @@ with col_save:
             "ext_cc": ext_cc,
             "ext_other": ext_other
         })
-        # Use a toast notification so it doesn't break button alignment
+        # Use toast so alignment doesn't break
         st.toast("✅ Property successfully saved to history!")
-        # CRITICAL FIX: Force the app to immediately redraw Tab 9 with the new data
+        # Force rerun so Tab 9 updates instantly without double-clicking
         st.rerun()
 
 with col_dl:
@@ -931,7 +940,7 @@ with col_dl:
         file_name=f"{property_name.replace(' ', '_')}_Summary.pdf",
         mime="application/pdf",
         on_click=save_to_history,
-        use_container_width=True, # Ensure buttons match in width
+        use_container_width=True, 
         args=(property_name, property_url, {
             "purchase_price": purchase_price,
             "beds": beds, "baths": baths, "cars": cars,
