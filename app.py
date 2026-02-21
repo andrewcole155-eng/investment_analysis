@@ -6,6 +6,7 @@ from fpdf import FPDF
 import matplotlib.pyplot as plt
 import io
 import os
+from datetime import datetime  # <--- NEW: Added to handle the print date
 
 # --- PAGE SETUP ---
 st.set_page_config(page_title="Investment Analysis", layout="wide")
@@ -14,13 +15,14 @@ st.markdown("---")
 
 # --- 1. GLOBAL INPUTS (SIDEBAR) ---
 st.sidebar.header("📍 Core Parameters")
+# NEW: Property Name Input
+property_name = st.sidebar.text_input("Property Name/Address", value="2 Example Street MELBOURNE")
 purchase_price = st.sidebar.number_input("Purchase Price ($)", value=850000, step=10000)
 salary = st.sidebar.number_input("Your Annual Salary ($)", value=120000, step=5000)
 growth_rate = st.sidebar.slider("Expected Annual Growth (%)", 0.0, 12.0, 5.0, step=0.5) / 100
 holding_period = st.sidebar.slider("Holding Period (Years)", 1, 30, 10)
 
 # --- 2. CREATE TABS ---
-# We define the tabs here, then fill them sequentially so variables pass down correctly.
 tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
     "Property & Acquisition", 
     "Income & Expenses", 
@@ -84,10 +86,8 @@ with tab3:
         annual_interest = loan_amount * interest_rate
         annual_repayment = annual_interest
     else:
-        # P&I math using numpy_financial
         monthly_repayment = abs(npf.pmt(interest_rate/12, loan_term*12, loan_amount))
         annual_repayment = monthly_repayment * 12
-        # For year 1 tax purposes, we estimate the interest portion
         annual_interest = loan_amount * interest_rate 
         
     st.divider()
@@ -108,7 +108,6 @@ with tab4:
 with tab5:
     st.subheader("Tax Impact & Cash Flow")
     
-    # 1. Tax Logic (Stage 3 Australian Tax Brackets)
     def calculate_tax(income):
         if income <= 18200: return 0
         elif income <= 45000: return (income - 18200) * 0.16
@@ -116,17 +115,14 @@ with tab5:
         elif income <= 190000: return 31288 + (income - 135000) * 0.37
         else: return 51638 + (income - 190000) * 0.45
 
-    # 2. Accounting logic for Year 1
     total_tax_deductions = total_operating_expenses + annual_interest + total_depreciation
     taxable_property_income = annual_gross_income - total_tax_deductions
     
-    # 3. Tax Refund Calculation
     base_tax = calculate_tax(salary)
     new_taxable_income = max(0, salary + taxable_property_income)
     new_tax = calculate_tax(new_taxable_income)
     tax_variance = base_tax - new_tax
     
-    # 4. Out of Pocket Cash Flow Logic
     pre_tax_cashflow = annual_gross_income - (total_operating_expenses + annual_repayment)
     post_tax_cashflow = pre_tax_cashflow + tax_variance
 
@@ -149,9 +145,7 @@ with tab6:
     st.subheader("Equity & Growth Forecast")
     
     years = np.arange(1, holding_period + 1)
-    # Simple compound growth
     future_values = [purchase_price * (1 + growth_rate)**y for y in years]
-    # Simple equity (Assuming interest-only for the chart to keep it clean)
     equity = [val - loan_amount for val in future_values]
     
     df_chart = pd.DataFrame({
@@ -162,7 +156,6 @@ with tab6:
     
     st.line_chart(df_chart)
     
-    # Show data table
     st.write("Detailed Breakdown")
     st.dataframe(df_chart.style.format("${:,.0f}"))
 
@@ -170,14 +163,10 @@ with tab6:
 with tab7:
     st.subheader("Capital Gains Tax (Year 10 Sale)")
     
-    # We grab the Year 10 value from the projections
     sale_price = future_values[-1] 
-    
-    # Matching your Excel logic
     capital_gain = sale_price - purchase_price
-    cgt_discount = capital_gain * 0.50  # 50% discount for holding > 12 months
+    cgt_discount = capital_gain * 0.50  
     
-    # Estimate marginal tax rate based on salary (or allow manual input like your Excel)
     est_marginal_rate = st.number_input("Marginal Tax Rate for Sale Year (%)", value=35.0) / 100
     
     cgt_payable = cgt_discount * est_marginal_rate
@@ -198,7 +187,6 @@ st.subheader("📄 Export Analysis Report")
 def generate_pdf():
     class InvestmentReportPDF(FPDF):
         def header(self):
-            # FIXED LOGO PATH (Relative path - ensure image is in same folder as app.py)
             logo_path = "AQI_Logo.png" 
             if os.path.exists(logo_path):
                 self.image(logo_path, 10, 8, 30)
@@ -226,10 +214,24 @@ def generate_pdf():
             self.set_font("helvetica", "", 12)
             self.cell(90, 8, label, border=0)
             self.set_font("helvetica", "B", 12)
+            self.set_text_color(0, 0, 0)
             self.cell(0, 8, value, ln=True, border=0)
 
     pdf = InvestmentReportPDF()
     pdf.add_page()
+    
+    # --- NEW: Property Info & Date Header ---
+    current_date = datetime.now().strftime("%d %B %Y")
+    
+    pdf.set_font("helvetica", "B", 12)
+    pdf.set_text_color(0, 0, 0)
+    pdf.cell(0, 8, f"Property: {property_name}", ln=True)
+    
+    pdf.set_font("helvetica", "I", 10)
+    pdf.set_text_color(100, 100, 100) # Nice subtle grey for the date
+    pdf.cell(0, 8, f"Report Generated: {current_date}", ln=True)
+    pdf.ln(5)
+    pdf.set_text_color(0, 0, 0) # Reset color
     
     # 1. Acquisition
     pdf.section_header("1. Acquisition & Capital Required")
@@ -252,7 +254,7 @@ def generate_pdf():
     pdf.row("Estimated Equity (Year 10):", f"${equity[-1]:,.0f}")
     pdf.ln(5)
 
-    # 4. CGT & Sale Profit (NEW)
+    # 4. CGT & Sale Profit
     pdf.section_header("4. Sale & Capital Gains Tax (Year 10)")
     pdf.row("Estimated Capital Gain:", f"${capital_gain:,.0f}")
     pdf.row("Estimated CGT Payable:", f"${cgt_payable:,.0f}")
@@ -275,7 +277,6 @@ def generate_pdf():
     plt.savefig(img_buffer, format="png", bbox_inches="tight", dpi=150)
     img_buffer.seek(0)
     
-    # Since we added a new section, we check if we need a page break before the chart
     if pdf.get_y() > 200:
         pdf.add_page()
         
@@ -285,9 +286,10 @@ def generate_pdf():
 
 # --- DOWNLOAD BUTTON ---
 pdf_bytes = generate_pdf()
+# Dynamically name the downloaded file based on the property name
 st.download_button(
     label="⬇️ Download Professional PDF Report",
     data=pdf_bytes,
-    file_name="AQI_Investment_Report.pdf",
+    file_name=f"{property_name.replace(' ', '_')}_Report.pdf",
     mime="application/pdf"
 )
