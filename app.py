@@ -712,15 +712,10 @@ def generate_pdf(salary_1_annual, salary_2_annual, total_monthly_living, total_e
             self.ln(10)
 
         def footer(self):
-            # Position at 15 mm from bottom
             self.set_y(-15)
             self.set_font("helvetica", "I", 8)
             self.set_text_color(150, 150, 150)
-            
-            # AI Disclaimer
-            self.cell(0, 5, "*Disclaimer: The estimated suburb market yield is an AI-generated benchmark and should be independently verified.", align="C", new_x="LMARGIN", new_y="NEXT")
-            
-            # Page Number
+            self.cell(0, 5, "*Disclaimer: The suburb market yield and serviceability checks are estimates for guidance only.", align="C", new_x="LMARGIN", new_y="NEXT")
             self.cell(0, 5, f"Page {self.page_no()}", align="C")
 
         def section_header(self, title):
@@ -751,52 +746,61 @@ def generate_pdf(salary_1_annual, salary_2_annual, total_monthly_living, total_e
     pdf.cell(0, 8, property_name, new_x="LMARGIN", new_y="NEXT")
     pdf.set_font("helvetica", "", 11)
     pdf.cell(0, 7, f"Configuration: {beds} Bed | {baths} Bath | {cars} Car", new_x="LMARGIN", new_y="NEXT")
-    
-    if property_url and property_url.strip() != "" and property_url != "https://www.realestate.com.au/":
-        pdf.set_font("helvetica", "U", 9)
-        pdf.set_text_color(0, 102, 204) 
-        pdf.cell(0, 6, "View Listing Online", link=property_url, new_x="LMARGIN", new_y="NEXT")
-        pdf.set_text_color(0, 0, 0) 
     pdf.ln(3)
 
-    # --- 2. ACQUISITION & FINANCE ---
-    cash_outlay = total_cost_base - loan_amount
-    pdf.section_header("Acquisition & Finance")
-    pdf.row("Purchase Price:", f"${purchase_price:,.0f}", "Loan Amount:", f"${loan_amount:,.0f}")
-    pdf.row("Interest Rate:", f"{interest_rate*100:.2f}%", "Loan Type:", f"{loan_type}")
-    pdf.row("Total Entry Costs:", f"${total_acquisition_costs:,.0f}", "Total Cash Outlay:", f"${cash_outlay:,.0f}")
+    # --- 2. INVESTOR HOUSEHOLD PROFILE (The Updated Section) ---
+    pdf.section_header("Investor Household Profile")
+    pdf.row("Inv 1 Take-Home (Annual):", f"${salary_1_annual:,.0f}", "Ownership Split:", f"{ownership_split*100:.0f}% / {(1-ownership_split)*100:.0f}%")
+    pdf.row("Inv 2 Take-Home (Annual):", f"${salary_2_annual:,.0f}", "Annual Depreciation:", f"${total_depreciation:,.0f}")
+    pdf.ln(2)
+    
+    # Highlight the Negative Gearing Benefit
+    pdf.set_font("helvetica", "I", 10)
+    pdf.set_text_color(0, 102, 204)
+    pdf.cell(0, 7, f"Est. Additional Annual Tax Refund (Gearing): ${total_tax_variance:,.2f}", new_x="LMARGIN", new_y="NEXT")
+    pdf.set_text_color(0, 0, 0)
     pdf.ln(3)
 
-    # --- 3. YIELD ANALYSIS & MARKET COMPARISON ---
-    pdf.section_header("Yield Analysis & Market Comparison (AI Estimated)")
-    pdf.row("Property Gross Yield:", f"{property_yield:.2f}%")
+    # --- 3. PROPERTY CASH FLOW (ANNUAL) ---
+    pdf.section_header("Property Performance (Annual Pre-Tax)")
+    pdf.row("Gross Annual Rent:", f"${annual_gross_income:,.0f}", "Operating Expenses:", f"-${total_operating_expenses:,.0f}")
+    pdf.row("Loan Interest Expense:", f"-${annual_interest:,.0f}", "Net Property Cash Flow:", f"${pre_tax_cashflow:,.2f}")
+    pdf.ln(3)
+
+    # --- 4. HOUSEHOLD SERVICEABILITY (MONTHLY) ---
+    pdf.section_header("Monthly Household Serviceability")
     
-    if market_yield:
-        variance = property_yield - market_yield
-        if variance >= 0:
-            status = f"Outperforming by {variance:.2f}%"
-            pdf.set_text_color(0, 128, 0) # Green for outperforming
-        else:
-            status = f"Underperforming by {abs(variance):.2f}%"
-            pdf.set_text_color(200, 0, 0) # Red for underperforming
-            
-        pdf.row("Est. Suburb Average:", f"{market_yield:.2f}%", "Market Status:", status)
+    # Calculations
+    total_household_net_m = (salary_1_annual + salary_2_annual) / 12
+    shaded_rent_m = (monthly_rent * 0.80)
+    new_mortgage_m = monthly_io if loan_type == "Interest Only" else monthly_pi
+    
+    monthly_inflow = total_household_net_m + shaded_rent_m
+    monthly_outflow = total_monthly_living + total_existing_debt_m + new_mortgage_m
+    net_monthly_surplus = monthly_inflow - monthly_outflow
+
+    pdf.set_font("helvetica", "B", 10)
+    pdf.cell(0, 7, "Serviceability Breakdown (Monthly):", new_x="LMARGIN", new_y="NEXT")
+    pdf.set_font("helvetica", "", 10)
+    
+    pdf.row("Take-Home Salary:", f"${total_household_net_m:,.2f}", "Living Expenses:", f"-${total_monthly_living:,.2f}")
+    pdf.row("Rental Income (80%):", f"${shaded_rent_m:,.2f}", "Existing Debts:", f"-${total_existing_debt_m:,.2f}")
+    pdf.row("New Property Loan:", f"-${new_mortgage_m:,.2f}")
+    
+    pdf.ln(2)
+    if net_monthly_surplus >= 0:
+        pdf.set_text_color(0, 128, 0)
+        pdf.set_font("helvetica", "B", 12)
+        pdf.cell(0, 10, f"ESTIMATED MONTHLY SURPLUS: ${net_monthly_surplus:,.2f}", align="R", new_x="LMARGIN", new_y="NEXT")
     else:
-        pdf.set_text_color(128, 128, 128)
-        pdf.row("Est. Suburb Average:", "Data Unavailable", "Market Status:", "N/A")
-        
-    pdf.set_text_color(0, 0, 0) # Reset color
-    pdf.ln(3)
-
-    # --- 4. HOUSEHOLD TAX PROFILE ---
-    pdf.section_header("Household Tax Profile")
-    pdf.row("Investor 1 Salary:", f"${salary_1:,.0f}", "Ownership Split:", f"{ownership_split*100:.0f}% / {(1-ownership_split)*100:.0f}%")
-    pdf.row("Investor 2 Salary:", f"${salary_2:,.0f}", "Annual Depreciation:", f"${total_depreciation:,.0f}")
-    pdf.ln(3)
-
-    # --- 5. CASH FLOW & SERVICEABILITY ANALYSIS ---
-    pdf.section_header("Cash Flow & Household Serviceability")
+        pdf.set_text_color(200, 0, 0)
+        pdf.set_font("helvetica", "B", 12)
+        pdf.cell(0, 10, f"ESTIMATED MONTHLY DEFICIT: ${abs(net_monthly_surplus):,.2f}", align="R", new_x="LMARGIN", new_y="NEXT")
     
+    pdf.set_text_color(0, 0, 0)
+    pdf.ln(5)
+
+    # --- 5. WEALTH MILESTONES & CHARTS ---    
     # Property Specifics
     pdf.row("Annual Rent:", f"${annual_gross_income:,.0f}", "Operating Expenses:", f"-${total_operating_expenses:,.0f}")
     pdf.row("Loan Interest:", f"-${annual_interest:,.0f}", "Pre-Tax Property CF:", f"${pre_tax_cashflow:,.2f}")
@@ -892,9 +896,14 @@ def generate_pdf(salary_1_annual, salary_2_annual, total_monthly_living, total_e
 
     return bytes(pdf.output())
 
-# --- DOWNLOAD BUTTON ---
-# Pass the required variables into the function here
-pdf_bytes = generate_pdf(salary_1_annual, salary_2_annual, total_monthly_living, total_existing_debt_m)
+# --- DOWNLOAD BUTTON (Line 890 approx) ---
+# Ensure these four variables are passed to the function
+pdf_bytes = generate_pdf(
+    salary_1_annual, 
+    salary_2_annual, 
+    total_monthly_living, 
+    total_existing_debt_m
+)
 
 st.download_button(
     label="⬇️ Download Full Summary PDF",
@@ -905,15 +914,15 @@ st.download_button(
     args=(property_name, property_url, {
         "purchase_price": purchase_price,
         "beds": beds, "baths": baths, "cars": cars,
-        "salary_1": salary_1,
-        "salary_2": salary_2,
+        "salary_1": salary_1_annual,
+        "salary_2": salary_2_annual,
         "ownership_split": ownership_split,
         "growth_rate": growth_rate,
         "holding_period": holding_period,
         "living_expenses_json": st.session_state.form_data["living_expenses_json"],
-        "ext_mortgage": ext_mortgage,
-        "ext_car_loan": ext_car_loan,
-        "ext_cc": ext_cc,
-        "ext_other": ext_other
+        "ext_mortgage": float(st.session_state.form_data.get("ext_mortgage", 0.0)),
+        "ext_car_loan": float(st.session_state.form_data.get("ext_car_loan", 0.0)),
+        "ext_cc": float(st.session_state.form_data.get("ext_cc", 0.0)),
+        "ext_other": float(st.session_state.form_data.get("ext_other", 0.0))
     })
 )
