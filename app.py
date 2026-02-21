@@ -695,6 +695,12 @@ with tab10:
 st.markdown("---")
 st.subheader("📄 Export Analysis Report")
 
+The link disappeared because the conditional logic in the generate_pdf function only displays it if the property_url strictly matches a specific format. Since we updated the variable names and the function structure, the variable containing that URL wasn't reaching the header correctly.
+
+Here is the fully integrated generate_pdf function. This version restores the Listing Link, updates the Household Profile to reflect your actual Take-Home Pay, and includes the Negative Gearing Benefit as a separate highlight so the tax profile remains useful rather than obsolete.
+
+Updated generate_pdf Function
+Python
 def generate_pdf(salary_1_annual, salary_2_annual, total_monthly_living, total_existing_debt_m):
     # Fetch AI Market Yield Data
     market_yield = fetch_market_yield(property_name, beds, baths, cars)
@@ -715,7 +721,7 @@ def generate_pdf(salary_1_annual, salary_2_annual, total_monthly_living, total_e
             self.set_y(-15)
             self.set_font("helvetica", "I", 8)
             self.set_text_color(150, 150, 150)
-            self.cell(0, 5, "*Disclaimer: The suburb market yield and serviceability checks are estimates for guidance only.", align="C", new_x="LMARGIN", new_y="NEXT")
+            self.cell(0, 5, "*Disclaimer: Suburb yield and serviceability are estimates for guidance only.", align="C", new_x="LMARGIN", new_y="NEXT")
             self.cell(0, 5, f"Page {self.page_no()}", align="C")
 
         def section_header(self, title):
@@ -741,27 +747,33 @@ def generate_pdf(salary_1_annual, salary_2_annual, total_monthly_living, total_e
     pdf = InvestmentReportPDF()
     pdf.add_page()
     
-    # --- 1. PROPERTY HEADER ---
+    # --- 1. PROPERTY HEADER (Restored Link) ---
     pdf.set_font("helvetica", "B", 16)
     pdf.cell(0, 8, property_name, new_x="LMARGIN", new_y="NEXT")
     pdf.set_font("helvetica", "", 11)
     pdf.cell(0, 7, f"Configuration: {beds} Bed | {baths} Bath | {cars} Car", new_x="LMARGIN", new_y="NEXT")
+    
+    # Restored link logic
+    if property_url and property_url.strip() != "" and property_url != "https://www.realestate.com.au/":
+        pdf.set_font("helvetica", "U", 9)
+        pdf.set_text_color(0, 102, 204) 
+        pdf.cell(0, 6, "View Listing Online", link=property_url, new_x="LMARGIN", new_y="NEXT")
+        pdf.set_text_color(0, 0, 0) 
     pdf.ln(3)
 
-    # --- 2. INVESTOR HOUSEHOLD PROFILE (The Updated Section) ---
+    # --- 2. INVESTOR HOUSEHOLD PROFILE ---
     pdf.section_header("Investor Household Profile")
     pdf.row("Inv 1 Take-Home (Annual):", f"${salary_1_annual:,.0f}", "Ownership Split:", f"{ownership_split*100:.0f}% / {(1-ownership_split)*100:.0f}%")
     pdf.row("Inv 2 Take-Home (Annual):", f"${salary_2_annual:,.0f}", "Annual Depreciation:", f"${total_depreciation:,.0f}")
-    pdf.ln(2)
     
-    # Highlight the Negative Gearing Benefit
+    # Gearing Benefit Highlight
     pdf.set_font("helvetica", "I", 10)
     pdf.set_text_color(0, 102, 204)
-    pdf.cell(0, 7, f"Est. Additional Annual Tax Refund (Gearing): ${total_tax_variance:,.2f}", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 7, f"Est. Additional Annual Tax Refund (Negative Gearing): ${total_tax_variance:,.2f}", new_x="LMARGIN", new_y="NEXT")
     pdf.set_text_color(0, 0, 0)
     pdf.ln(3)
 
-    # --- 3. PROPERTY CASH FLOW (ANNUAL) ---
+    # --- 3. PROPERTY PERFORMANCE (ANNUAL) ---
     pdf.section_header("Property Performance (Annual Pre-Tax)")
     pdf.row("Gross Annual Rent:", f"${annual_gross_income:,.0f}", "Operating Expenses:", f"-${total_operating_expenses:,.0f}")
     pdf.row("Loan Interest Expense:", f"-${annual_interest:,.0f}", "Net Property Cash Flow:", f"${pre_tax_cashflow:,.2f}")
@@ -770,7 +782,6 @@ def generate_pdf(salary_1_annual, salary_2_annual, total_monthly_living, total_e
     # --- 4. HOUSEHOLD SERVICEABILITY (MONTHLY) ---
     pdf.section_header("Monthly Household Serviceability")
     
-    # Calculations
     total_household_net_m = (salary_1_annual + salary_2_annual) / 12
     shaded_rent_m = (monthly_rent * 0.80)
     new_mortgage_m = monthly_io if loan_type == "Interest Only" else monthly_pi
@@ -800,7 +811,7 @@ def generate_pdf(salary_1_annual, salary_2_annual, total_monthly_living, total_e
     pdf.set_text_color(0, 0, 0)
     pdf.ln(5)
 
-    # --- 5. WEALTH MILESTONES & CHARTS ---    
+    # --- 5. WEALTH MILESTONES & GROWTH CHART ---  
     # Property Specifics
     pdf.row("Annual Rent:", f"${annual_gross_income:,.0f}", "Operating Expenses:", f"-${total_operating_expenses:,.0f}")
     pdf.row("Loan Interest:", f"-${annual_interest:,.0f}", "Pre-Tax Property CF:", f"${pre_tax_cashflow:,.2f}")
