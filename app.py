@@ -84,7 +84,6 @@ if "form_data" not in st.session_state:
         "split": 50,
         "growth": 4.0, 
         "hold": 10,
-        # Ensure this key is defined here so Tab 10 doesn't crash on startup
         "living_expenses_json": json.dumps(DEFAULT_LIVING_EXPENSES_DATA),
         "ext_mortgage": 2921.0,    
         "ext_car_loan": 0.0,
@@ -94,8 +93,7 @@ if "form_data" not in st.session_state:
 
 # --- 2. LOAD PROPERTY FUNCTION (ENFORCING FLOATS) ---
 def load_property(row):
-    # 1. Update the 'Source of Truth' dictionary with data from the CSV row
-    # We use .get() to provide fallback defaults if the CSV is an older version
+    # 1. Update the 'Source of Truth' dictionary
     st.session_state.form_data = {
         "prop_name": row["Property Name"],
         "prop_url": row["Listing URL"],
@@ -115,9 +113,7 @@ def load_property(row):
         "ext_other": float(row.get("ext_other", 0.0))
     }
 
-    # 2. Clear the widget keys from session state memory.
-    # This prevents 'StreamlitAPIException' and forces the sidebar 
-    # to read the fresh values from the dictionary above.
+    # 2. Clear widget keys to prevent 'StreamlitAPIException'
     widget_keys = [
         "sb_prop_name", "sb_prop_url", "sb_price", "sb_beds", 
         "sb_baths", "sb_cars", "salary_input_1", "salary_input_2",
@@ -128,7 +124,7 @@ def load_property(row):
         if key in st.session_state:
             del st.session_state[key]
             
-    # 3. CRITICAL: Restart the app logic immediately.
+    # 3. Refresh the app to display loaded data
     st.rerun()
 
 # --- GEMINI AI YIELD ESTIMATOR ---
@@ -560,7 +556,7 @@ with tab10:
     edited_expenses = st.data_editor(
         current_expenses,
         num_rows="dynamic",
-        use_container_width=True,
+        width="stretch",
         column_config={
             "Monthly Amount ($)": st.column_config.NumberColumn(
                 "Monthly Amount ($)",
