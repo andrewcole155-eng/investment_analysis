@@ -340,6 +340,7 @@ with tab2:
     metric_col2.metric("Total Annual Expenses", f"${total_operating_expenses:,.2f}")
 
 # --- TAB 3: LOAN DETAILS (UPDATED FOR EQUITY FUNDING) ---
+# --- TAB 3: LOAN DETAILS (UPDATED FOR EQUITY FUNDING) ---
 with tab3:
     st.subheader("1. Core Investment Loan (Secured by Investment)")
     
@@ -363,7 +364,7 @@ with tab3:
     st.subheader("2. Deposit Funding (Equity Release Loan)")
     st.info("💡 Interest on equity loans used to fund deposits/stamp duty is tax-deductible.")
     
-    # CRITICAL FIX: Using .get() prevents KeyErrors if old session state is stuck in memory
+    # Safety check to prevent KeyErrors
     use_equity = st.checkbox("Fund Deposit via Equity Release?", value=st.session_state.form_data.get("use_eq", True))
     
     eq1, eq2 = st.columns(2)
@@ -382,6 +383,10 @@ with tab3:
     total_annual_debt_repayment = core_annual_repayment + eq_annual_repayment
     total_tax_deductible_interest = core_annual_interest + eq_annual_interest
     actual_cash_outlay = total_cost_base - loan_amount - eq_amount
+
+    # CRITICAL FIX: Re-declare legacy variables so Tab 0, Tab 6, and PDF don't crash
+    annual_interest = total_tax_deductible_interest
+    annual_repayment = total_annual_debt_repayment
 
 # --- TAB 4: CASH FLOW ---
 with tab4:
