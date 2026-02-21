@@ -765,43 +765,32 @@ def generate_pdf(salary_1_annual, salary_2_annual, total_monthly_living, total_e
     pdf.set_text_color(0, 0, 0)
     pdf.ln(3)
 
-    # --- 3. PROPERTY PERFORMANCE (ANNUAL) ---
+# --- 3. PROPERTY PERFORMANCE (ANNUAL PRE-TAX) ---
     pdf.section_header("Property Performance (Annual Pre-Tax)")
     pdf.row("Gross Annual Rent:", f"${annual_gross_income:,.0f}", "Operating Expenses:", f"-${total_operating_expenses:,.0f}")
     pdf.row("Loan Interest Expense:", f"-${annual_interest:,.0f}", "Net Property Cash Flow:", f"${pre_tax_cashflow:,.2f}")
     pdf.ln(3)
 
-    # --- 4. MONTHLY HOUSEHOLD SERVICEABILITY ---
-    pdf.section_header("Monthly Household Serviceability")
+    # --- RESTORED: YIELD ANALYSIS & MARKET COMPARISON ---
+    pdf.section_header("Yield Analysis & Market Comparison (AI Estimated)")
+    pdf.row("Property Gross Yield:", f"{property_yield:.2f}%")
     
-    total_household_net_m = (salary_1_annual + salary_2_annual) / 12
-    shaded_rent_m = (monthly_rent * 0.80)
-    new_mortgage_m = monthly_io if loan_type == "Interest Only" else monthly_pi
-    
-    monthly_inflow = total_household_net_m + shaded_rent_m
-    monthly_outflow = total_monthly_living + total_existing_debt_m + new_mortgage_m
-    net_monthly_surplus = monthly_inflow - monthly_outflow
-
-    pdf.set_font("helvetica", "B", 10)
-    pdf.cell(0, 7, "Serviceability Breakdown (Monthly):", new_x="LMARGIN", new_y="NEXT")
-    pdf.set_font("helvetica", "", 10)
-    
-    pdf.row("Take-Home Salary:", f"${total_household_net_m:,.2f}", "Living Expenses:", f"-${total_monthly_living:,.2f}")
-    pdf.row("Rental Income (80%):", f"${shaded_rent_m:,.2f}", "Existing Debts:", f"-${total_existing_debt_m:,.2f}")
-    pdf.row("New Property Loan:", f"-${new_mortgage_m:,.2f}")
-    
-    pdf.ln(2)
-    if net_monthly_surplus >= 0:
-        pdf.set_text_color(0, 128, 0)
-        pdf.set_font("helvetica", "B", 12)
-        pdf.cell(0, 10, f"ESTIMATED MONTHLY SURPLUS: ${net_monthly_surplus:,.2f}", align="R", new_x="LMARGIN", new_y="NEXT")
+    if market_yield:
+        variance = property_yield - market_yield
+        if variance >= 0:
+            status = f"Outperforming by {variance:.2f}%"
+            pdf.set_text_color(0, 128, 0) # Green for outperforming
+        else:
+            status = f"Underperforming by {abs(variance):.2f}%"
+            pdf.set_text_color(200, 0, 0) # Red for underperforming
+            
+        pdf.row("Est. Suburb Average:", f"{market_yield:.2f}%", "Market Status:", status)
     else:
-        pdf.set_text_color(200, 0, 0)
-        pdf.set_font("helvetica", "B", 12)
-        pdf.cell(0, 10, f"ESTIMATED MONTHLY DEFICIT: ${abs(net_monthly_surplus):,.2f}", align="R", new_x="LMARGIN", new_y="NEXT")
-    
-    pdf.set_text_color(0, 0, 0)
-    pdf.ln(5)
+        pdf.set_text_color(128, 128, 128)
+        pdf.row("Est. Suburb Average:", "Data Unavailable", "Market Status:", "N/A")
+        
+    pdf.set_text_color(0, 0, 0) # Reset color to black for the next section
+    pdf.ln(3)
 
     # --- 5. EXIT STRATEGY & CGT ---
     pdf.section_header(f"Exit Strategy & CGT Projection (Year {holding_period})")
