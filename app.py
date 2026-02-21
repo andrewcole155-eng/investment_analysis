@@ -8,6 +8,7 @@ import io
 import os
 from datetime import datetime
 import matplotlib.ticker as ticker
+import google.generativeai as genai 
 
 # --- PAGE SETUP ---
 st.set_page_config(page_title="Investment Analysis", layout="wide")
@@ -69,6 +70,34 @@ def load_property(row):
         "growth": float(row["growth_rate"] * 100),
         "hold": int(row["holding_period"])
     }
+
+# --- GEMINI AI YIELD ESTIMATOR ---
+@st.cache_data(ttl=3600, show_spinner=False)
+def fetch_market_yield(address, beds, baths, cars):
+    """Fetches estimated market yield from Gemini based on location and specs."""
+    try:
+        # Load API key from Streamlit secrets
+        api_key = st.secrets["GEMINI_API_KEY"]
+        genai.configure(api_key=api_key)
+        
+        # Use flash for faster responses
+        model = genai.GenerativeModel('gemini-2.0-flash') 
+        
+        prompt = (
+            f"Estimate the average gross rental yield percentage for a {beds} bedroom, "
+            f"{baths} bathroom, {cars} car space residential property located in or around '{address}'. "
+            "Respond with ONLY a single numerical value representing the percentage (e.g., 4.5). "
+            "Do not include the % sign or any other text. If exact data is unavailable, provide your best realistic estimate."
+        )
+        
+        response = model.generate_content(prompt)
+        
+        # Clean the output to ensure it's a float
+        clean_val = response.text.strip().replace('%', '').replace(',', '.')
+        return float(clean_val)
+    except Exception as e:
+        # Fails gracefully if API is down, key is missing, or parsing fails
+        return None
 
 # --- 1. GLOBAL INPUTS (SIDEBAR) ---
 st.sidebar.header("📍 Core Parameters")
@@ -389,6 +418,10 @@ st.markdown("---")
 st.subheader("📄 Export Analysis Report")
 
 def generate_pdf():
+    # Fetch AI Market Yield Data
+    market_yield = fetch_market_yield(property_name, beds, baths, cars)
+    property_yield = (annual_gross_income / purchase_price) * 100
+
     class InvestmentReportPDF(FPDF):
         def header(self):
             logo_path = "AQI_Logo.png" 
@@ -401,10 +434,16 @@ def generate_pdf():
             self.ln(10)
 
         def footer(self):
+            # Position at 15 mm from bottom
             self.set_y(-15)
             self.set_font("helvetica", "I", 8)
-            self.set_text_color(128, 128, 128)
-            self.cell(0, 10, f"Page {self.page_no()}", align="C")
+            self.set_text_color(150, 150, 150) # Light grey so it's unobtrusive
+            
+            # AI Disclaimer
+            self.cell(0, 5, "*Disclaimer: The estimated suburb market yield is an AI-generated benchmark and should be independently verified.", align="C", ln=True)
+            
+            # Page Number
+            self.cell(0, 5, f"Page {self.page_no()}", align="C")
 
         def section_header(self, title):
             self.set_font("helvetica", "B", 13)
@@ -450,13 +489,34 @@ def generate_pdf():
     pdf.row("Total Entry Costs:", f"${total_acquisition_costs:,.0f}", "Total Cash Outlay:", f"${cash_outlay:,.0f}")
     pdf.ln(3)
 
-    # --- 3. HOUSEHOLD TAX PROFILE ---
+    # --- NEW: 3. YIELD ANALYSIS & MARKET COMPARISON ---
+    pdf.section_header("Yield Analysis & Market Comparison (AI Estimated)")
+    pdf.row("Property Gross Yield:", f"{property_yield:.2f}%")
+    
+    if market_yield:
+        variance = property_yield - market_yield
+        if variance >= 0:
+            status = f"Outperforming by {variance:.2f}%"
+            pdf.set_text_color(0, 128, 0) # Green for outperforming
+        else:
+            status = f"Underperforming by {abs(variance):.2f}%"
+            pdf.set_text_color(200, 0, 0) # Red for underperforming
+            
+        pdf.row("Est. Suburb Average:", f"{market_yield:.2f}%", "Market Status:", status)
+    else:
+        pdf.set_text_color(128, 128, 128)
+        pdf.row("Est. Suburb Average:", "Data Unavailable", "Market Status:", "N/A")
+        
+    pdf.set_text_color(0, 0, 0) # Reset color
+    pdf.ln(3)
+
+    # --- 4. HOUSEHOLD TAX PROFILE ---
     pdf.section_header("Household Tax Profile")
     pdf.row("Investor 1 Salary:", f"${salary_1:,.0f}", "Ownership Split:", f"{ownership_split*100:.0f}% / {(1-ownership_split)*100:.0f}%")
     pdf.row("Investor 2 Salary:", f"${salary_2:,.0f}", "Annual Depreciation:", f"${total_depreciation:,.0f}")
     pdf.ln(3)
 
-    # --- 4. CASH FLOW & GEARING ---
+    # --- 5. CASH FLOW & GEARING ---
     pdf.section_header("Cash Flow & Negative Gearing Impact")
     pdf.row("Annual Rent:", f"${annual_gross_income:,.0f}", "Operating Expenses:", f"-${total_operating_expenses:,.0f}")
     pdf.row("Loan Interest:", f"-${annual_interest:,.0f}", "Pre-Tax Cash Flow:", f"${pre_tax_cashflow:,.0f}")
@@ -470,7 +530,7 @@ def generate_pdf():
     pdf.cell(0, 7, f"Net Weekly Household Impact: ${post_tax_cashflow/52:,.2f} per week", ln=True)
     pdf.ln(3)
 
-    # --- 5. EXIT STRATEGY & CGT (YEAR 10) ---
+    # --- 6. EXIT STRATEGY & CGT (YEAR 10) ---
     pdf.section_header(f"Exit Strategy & CGT Projection (Year {holding_period})")
     pdf.row("Est. Sale Price:", f"${future_values[-1]:,.0f}", "Gross Capital Gain:", f"${capital_gain:,.0f}")
     pdf.row("Marginal Tax Rate:", f"{est_marginal_rate*100:.1f}%", "Est. CGT Payable:", f"${cgt_payable:,.0f}")
@@ -478,7 +538,7 @@ def generate_pdf():
     pdf.row("NET PROFIT ON SALE:", f"${net_profit_on_sale:,.0f}")
     pdf.ln(3)
 
-    # --- 6. WEALTH MILESTONES ---
+    # --- 7. WEALTH MILESTONES ---
     pdf.section_header("Projected Wealth Milestones")
     pdf.set_font("helvetica", "B", 9)
     pdf.set_fill_color(240, 240, 240)
@@ -496,44 +556,33 @@ def generate_pdf():
             pdf.cell(80, 7, f"${eq:,.0f}", border=1, align="C", ln=True)
     pdf.ln(5)
 
-    # --- 7. GROWTH CHART ---
-    # Made it slightly taller for better spacing
+    # --- 8. GROWTH CHART (Professional Formatting) ---
     fig, ax = plt.subplots(figsize=(8, 3.5)) 
-    
-    # Professional colors (deep blue to match your AQI logo, and a clean green)
     color_market = "#003366" 
     color_equity = "#2ca02c"
     
-    # Plot lines with a modern fill underneath the equity curve
     ax.plot(df_chart.index, df_chart["Property Value"], label="Market Value", color=color_market, linewidth=2.5)
     ax.plot(df_chart.index, df_chart["Equity"], label="Equity Position", color=color_equity, linewidth=2.5)
     ax.fill_between(df_chart.index, df_chart["Equity"], color=color_equity, alpha=0.1)
     
-    # Styling Title
     ax.set_title(f"Equity Projection ({growth_rate*100:.1f}% Annual Growth)", fontsize=12, fontweight='bold', color="#333333", pad=15)
     
-    # --- FIX: Format Y-Axis as Currency ---
     formatter = ticker.FuncFormatter(lambda x, pos: f'${x:,.0f}')
     ax.yaxis.set_major_formatter(formatter)
     
-    # Clean up Grid & Spines (Borders) for a modern, minimalistic look
     ax.grid(True, axis='y', linestyle="--", alpha=0.5, color="#d3d3d3")
-    ax.grid(False, axis='x') # Removing vertical grid lines looks cleaner
+    ax.grid(False, axis='x')
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
     ax.spines['left'].set_color('#cccccc')
     ax.spines['bottom'].set_color('#cccccc')
     
-    # Soften tick labels
     ax.tick_params(axis='both', colors='#666666', labelsize=9)
-    
-    # Clean legend without a heavy box
     ax.legend(frameon=False, loc="upper left", fontsize=10)
     
     plt.tight_layout()
     
     img_buffer = io.BytesIO()
-    # Increased DPI to 200 for a sharper image in the PDF
     plt.savefig(img_buffer, format="png", bbox_inches="tight", dpi=200) 
     pdf.image(img_buffer, x=15, w=180)
 
