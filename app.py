@@ -41,6 +41,13 @@ def save_to_history(name, url):
 st.sidebar.header("📍 Core Parameters")
 property_name = st.sidebar.text_input("Property Name/Address", value="2 Example Street MELBOURNE")
 property_url = st.sidebar.text_input("Property Listing URL", value="https://www.realestate.com.au/")
+
+# NEW: Property Specs
+col_spec1, col_spec2, col_spec3 = st.sidebar.columns(3)
+beds = col_spec1.number_input("Beds", value=2, step=1)
+baths = col_spec2.number_input("Baths", value=1, step=1)
+cars = col_spec3.number_input("Cars", value=1, step=1)
+
 purchase_price = st.sidebar.number_input("Purchase Price ($)", value=650000, step=10000)
 
 st.sidebar.subheader("Tax Profiles (Joint Ownership)")
@@ -53,7 +60,9 @@ growth_rate = st.sidebar.slider("Expected Annual Growth (%)", 0.0, 12.0, 4.0, st
 holding_period = st.sidebar.slider("Holding Period (Years)", 1, 30, 10)
 
 # --- 2. CREATE TABS ---
-tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9 = st.tabs([
+# Reordered to put Summary first
+tab0, tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9 = st.tabs([
+    "📊 Summary Dashboard",
     "Property & Acquisition", 
     "Income & Expenses", 
     "Loan Details",
@@ -62,7 +71,7 @@ tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9 = st.tabs([
     "Tax & Gearing", 
     "10-Year Projections",
     "CGT Projection",
-    "Search History" # <--- NEW TAB
+    "Search History"
 ])
 
 # --- TAB 1: ACQUISITION ---
@@ -152,7 +161,6 @@ with tab3:
         st.markdown("#### Interest Only (IO)")
         st.write(f"**Monthly I Repayment:** ${monthly_io:,.2f}")
         st.write(f"**Annual Repayment:** ${annual_io:,.2f}")
-        st.markdown(f"**Total Savings of I only: <span style='color:green'>${savings_io:,.2f}</span>**", unsafe_allow_html=True)
 
 # --- TAB 4: CASH FLOW ---
 with tab4:
@@ -227,10 +235,6 @@ with tab6:
         t_col2.metric("Combined Estimated Tax Payable", f"${abs(total_tax_variance):,.2f}")
         
     st.metric("Household Net Post-Tax Cash Flow (Annual)", f"${post_tax_cashflow:,.2f}")
-    if post_tax_cashflow < 0:
-        st.write(f"⚠️ This property costs your household **${abs(post_tax_cashflow)/52:,.2f} per week** out of pocket to hold.")
-    else:
-        st.write(f"✅ This property puts **${post_tax_cashflow/52:,.2f} per week** in your household's pocket.")
 
 # --- TAB 7: 10-YEAR PROJECTIONS ---
 with tab7:
@@ -247,7 +251,6 @@ with tab7:
     }).set_index("Year")
     
     st.line_chart(df_chart)
-    st.dataframe(df_chart.style.format("${:,.2f}"))
 
 # --- TAB 8: CGT PROJECTION ---
 with tab8:
@@ -270,32 +273,52 @@ with tab8:
     c_col2.metric("Estimated CGT Payable", f"${cgt_payable:,.2f}")
     c_col2.metric("Net Profit After Tax", f"${net_profit_on_sale:,.2f}")
 
+# --- TAB 0: SUMMARY DASHBOARD (NEW) ---
+with tab0:
+    st.subheader(f"📊 Summary: {property_name}")
+    st.markdown(f"**Specs:** {beds} 🛏️ | {baths} 🛁 | {cars} 🚗")
+    
+    # KPIs
+    kpi1, kpi2, kpi3, kpi4 = st.columns(4)
+    kpi1.metric("Purchase Price", f"${purchase_price:,.0f}")
+    kpi2.metric("Gross Yield", f"{(annual_gross_income / purchase_price)*100:.2f}%")
+    kpi3.metric("Total Outlay", f"${(total_cost_base - loan_amount):,.0f}")
+    kpi4.metric("Net Operating Income", f"${net_operating_income:,.0f}")
+    
+    st.divider()
+    
+    # Cash Flow Breakdown
+    cf1, cf2, cf3 = st.columns(3)
+    cf1.metric("Annual Pre-Tax", f"${pre_tax_cashflow:,.0f}", f"${pre_tax_cashflow/52:,.2f} pw")
+    cf2.metric("Estimated Tax Impact", f"${total_tax_variance:,.0f}", delta_color="normal")
+    cf3.metric("Annual Post-Tax", f"${post_tax_cashflow:,.0f}", f"${post_tax_cashflow/52:,.2f} pw")
+    
+    st.divider()
+    
+    # Visual Insight
+    v1, v2 = st.columns([2, 1])
+    with v1:
+        st.write("### Equity & Growth Over Time")
+        st.area_chart(df_chart)
+    with v2:
+        st.write("### Expense Ratio")
+        expense_data = pd.DataFrame({
+            "Type": ["Operating Expenses", "Interest Costs"],
+            "Amount": [total_operating_expenses, annual_interest]
+        })
+        st.bar_chart(expense_data.set_index("Type"))
+
 # --- TAB 9: SEARCH HISTORY LOG ---
 with tab9:
     st.subheader("📚 Property Search History")
-    st.caption("A log of all properties you have exported to PDF. (Automatically saves upon PDF download)")
-    
     if os.path.exists(HISTORY_FILE):
-        history_df = pd.read_csv(HISTORY_FILE)
-        # Sort so the newest properties are at the top
-        history_df = history_df.sort_values(by="Date of PDF", ascending=False).reset_index(drop=True)
-        
-        # Display the dataframe with clickable links
-        st.dataframe(
-            history_df,
-            column_config={
-                "Listing URL": st.column_config.LinkColumn("Listing URL")
-            },
-            hide_index=True,
-            use_container_width=True
-        )
-        
-        # Add a clear button for housekeeping
+        history_df = pd.read_csv(HISTORY_FILE).sort_values(by="Date of PDF", ascending=False).reset_index(drop=True)
+        st.dataframe(history_df, column_config={"Listing URL": st.column_config.LinkColumn("Listing URL")}, hide_index=True, use_container_width=True)
         if st.button("🗑️ Clear History"):
             os.remove(HISTORY_FILE)
             st.rerun()
     else:
-        st.info("No properties analyzed yet. Go ahead and download your first PDF report to save it here!")
+        st.info("Download a PDF to save to history.")
 
 # --- PDF GENERATION LOGIC ---
 st.markdown("---")
@@ -307,7 +330,6 @@ def generate_pdf():
             logo_path = "AQI_Logo.png" 
             if os.path.exists(logo_path):
                 self.image(logo_path, 10, 8, 30)
-            
             self.set_font("helvetica", "B", 20)
             self.set_text_color(0, 51, 102)
             self.cell(40) 
@@ -336,17 +358,17 @@ def generate_pdf():
 
     pdf = InvestmentReportPDF()
     pdf.add_page()
-    
     current_date = datetime.now().strftime("%d %B %Y")
     
     pdf.set_font("helvetica", "B", 12)
-    pdf.set_text_color(0, 0, 0)
     pdf.cell(0, 6, f"Property: {property_name}", ln=True)
+    pdf.set_font("helvetica", "", 10)
+    pdf.cell(0, 6, f"Configuration: {beds} Bed | {baths} Bath | {cars} Car", ln=True)
     
     if property_url and property_url.strip() != "":
         pdf.set_font("helvetica", "U", 10)
         pdf.set_text_color(0, 102, 204) 
-        pdf.cell(0, 6, "Click here to view the online property listing", ln=True, link=property_url)
+        pdf.cell(0, 6, "Click here to view listing", ln=True, link=property_url)
     
     pdf.set_font("helvetica", "I", 10)
     pdf.set_text_color(100, 100, 100)
@@ -360,45 +382,23 @@ def generate_pdf():
     pdf.row("Total Funds Required:", f"${total_cost_base:,.0f}")
     pdf.ln(5)
     
-    pdf.section_header("2. Annual Cash Flow & Household Tax Impact")
+    pdf.section_header("2. Annual Cash Flow & Tax")
     pdf.row("Gross Annual Income:", f"${annual_gross_income:,.0f}")
-    pdf.row("Total Operating Expenses:", f"${total_operating_expenses:,.0f}")
-    pdf.row(f"Annual Debt Servicing ({loan_type}):", f"${annual_repayment:,.0f}")
-    pdf.row("Net Operating Income (NOI):", f"${net_operating_income:,.0f}")
-    pdf.row("Pre-Tax Cash Flow:", f"${pre_tax_cashflow:,.0f}")
-    pdf.row("Combined Tax Refund/Payable:", f"${total_tax_variance:,.0f}")
-    pdf.row("Net Post-Tax Cash Flow:", f"${post_tax_cashflow:,.0f}")
+    pdf.row("Annual Pre-Tax Cash Flow:", f"${pre_tax_cashflow:,.0f}")
+    pdf.row("Annual Post-Tax Cash Flow:", f"${post_tax_cashflow:,.0f}")
     pdf.ln(5)
     
-    pdf.section_header("3. 10-Year Wealth Forecast")
-    pdf.row("Estimated Property Value (Year 10):", f"${future_values[-1]:,.0f}")
-    pdf.row("Estimated Equity (Year 10):", f"${equity[-1]:,.0f}")
-    pdf.ln(5)
+    pdf.section_header("3. 10-Year Projections")
+    pdf.row("Estimated Property Value:", f"${future_values[-1]:,.0f}")
+    pdf.row("Estimated Net Profit on Sale:", f"${net_profit_on_sale:,.0f}")
 
-    pdf.section_header("4. Sale & Capital Gains Tax (Year 10)")
-    pdf.row("Estimated Capital Gain:", f"${capital_gain:,.0f}")
-    pdf.row("Estimated CGT Payable:", f"${cgt_payable:,.0f}")
-    pdf.row("Net Profit (After Tax):", f"${net_profit_on_sale:,.0f}")
-    pdf.ln(5)
-
+    # Add Chart to PDF
     fig, ax = plt.subplots(figsize=(8, 4))
     ax.plot(df_chart.index, df_chart["Property Value"], label="Property Value", color="#1f77b4", linewidth=2)
     ax.plot(df_chart.index, df_chart["Equity"], label="Equity", color="#2ca02c", linewidth=2)
-    
-    ax.set_title("10-Year Growth & Equity Accumulation", fontsize=14, pad=10)
-    ax.set_xlabel("Holding Year", fontsize=10)
-    ax.set_ylabel("Value ($)", fontsize=10)
-    ax.grid(True, linestyle="--", alpha=0.6)
-    ax.legend(loc="upper left")
-    ax.get_yaxis().set_major_formatter(plt.FuncFormatter(lambda x, loc: "{:,}".format(int(x))))
-    
+    ax.legend()
     img_buffer = io.BytesIO()
     plt.savefig(img_buffer, format="png", bbox_inches="tight", dpi=150)
-    img_buffer.seek(0)
-    
-    if pdf.get_y() > 190:
-        pdf.add_page()
-        
     pdf.image(img_buffer, x=15, w=180)
 
     return bytes(pdf.output())
@@ -410,6 +410,6 @@ st.download_button(
     data=pdf_bytes,
     file_name=f"{property_name.replace(' ', '_')}_Report.pdf",
     mime="application/pdf",
-    on_click=save_to_history, # Executes our save logic right as they download!
+    on_click=save_to_history,
     args=(property_name, property_url)
 )
