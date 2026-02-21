@@ -70,12 +70,12 @@ def save_to_history(name, url, params):
     history_df = history_df.drop_duplicates(subset=["Property Name", "Listing URL"], keep="last")
     history_df.to_csv(HISTORY_FILE, index=False)
 
-# --- 1. SESSION STATE (ENFORCING FLOATS) ---
+# --- 1. SESSION STATE (ENFORCING ALL KEYS) ---
 if "form_data" not in st.session_state:
     st.session_state.form_data = {
         "prop_name": "2 Example Street MELBOURNE",
         "prop_url": "https://www.realestate.com.au/",
-        "price": 650000.0,         # Added .0
+        "price": 650000.0,
         "beds": 2, 
         "baths": 1, 
         "cars": 1,
@@ -84,6 +84,7 @@ if "form_data" not in st.session_state:
         "split": 50,
         "growth": 4.0, 
         "hold": 10,
+        # Ensure this key is defined here so Tab 10 doesn't crash on startup
         "living_expenses_json": json.dumps(DEFAULT_LIVING_EXPENSES_DATA),
         "ext_mortgage": 2921.0,    
         "ext_car_loan": 0.0,
@@ -552,7 +553,9 @@ with tab10:
     st.subheader("Household Living Expenses (Monthly)")
     st.markdown("Modify the default values or add new rows below. Your custom expenses will be saved with this property search.")
     
-    current_expenses = pd.DataFrame(json.loads(st.session_state.form_data["living_expenses_json"]))
+    # Safer way to load expenses: use .get() to provide a fallback if the key is missing
+    expenses_raw = st.session_state.form_data.get("living_expenses_json", json.dumps(DEFAULT_LIVING_EXPENSES_DATA))
+    current_expenses = pd.DataFrame(json.loads(expenses_raw))
     
     edited_expenses = st.data_editor(
         current_expenses,
