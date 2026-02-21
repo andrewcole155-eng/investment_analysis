@@ -353,78 +353,91 @@ def generate_pdf():
             self.set_font("helvetica", "", 11)
             self.cell(50, 7, label, border=0)
             self.set_font("helvetica", "B", 11)
-            self.cell(45, 7, value, border=0)
+            self.cell(45, 7, str(value), border=0)
             if label2:
                 self.set_font("helvetica", "", 11)
                 self.cell(50, 7, label2, border=0)
                 self.set_font("helvetica", "B", 11)
-                self.cell(0, 7, value2, ln=True, border=0)
+                self.cell(0, 7, str(value2), ln=True, border=0)
             else:
                 self.ln(7)
 
     pdf = InvestmentReportPDF()
     pdf.add_page()
     
-    # 1. PROPERTY OVERVIEW
+    # --- 1. PROPERTY OVERVIEW & SELECTABLE URL ---
     pdf.set_font("helvetica", "B", 16)
     pdf.cell(0, 8, property_name, ln=True)
     pdf.set_font("helvetica", "", 12)
     pdf.cell(0, 8, f"Config: {beds} Bed | {baths} Bath | {cars} Car", ln=True)
+    
+    # RE-ADDED SELECTABLE URL LOGIC
+    if property_url and property_url.strip() != "" and property_url != "https://www.realestate.com.au/":
+        pdf.set_font("helvetica", "U", 10)
+        pdf.set_text_color(0, 102, 204) # Professional Blue
+        pdf.cell(0, 6, "🔗 View Online Listing", ln=True, link=property_url)
+        pdf.set_text_color(0, 0, 0) # Reset color
+    
+    pdf.set_font("helvetica", "I", 9)
+    pdf.set_text_color(100, 100, 100)
+    pdf.cell(0, 6, f"Report Date: {datetime.now().strftime('%d %B %Y')}", ln=True)
     pdf.ln(5)
+    pdf.set_text_color(0, 0, 0)
 
-    # 2. ACQUISITION & OUTLAY
+    # --- 2. ACQUISITION & OUTLAY ---
     cash_outlay = total_cost_base - loan_amount
     pdf.section_header("Acquisition & Outlay")
     pdf.row("Purchase Price:", f"${purchase_price:,.0f}", "Loan Amount:", f"${loan_amount:,.0f}")
     pdf.row("Total Entry Costs:", f"${total_acquisition_costs:,.0f}", "LVR:", f"{lvr_pct*100:.0f}%")
     pdf.set_font("helvetica", "B", 11)
-    pdf.set_text_color(200, 0, 0)
     pdf.row("TOTAL CASH REQUIRED:", f"${cash_outlay:,.0f}")
-    pdf.set_text_color(0, 0, 0)
     pdf.ln(5)
 
-    # 3. ANNUAL INCOME & EXPENSES
-    pdf.section_header("Estimated Operating Expenses (Annual)")
-    pdf.row("Management Fees:", f"${mgt_fee_m*12:,.0f}", "Strata/Body Corp:", f"${strata_m*12:,.0f}")
-    pdf.row("Council Rates:", f"${rates_m*12:,.0f}", "Maintenance/Other:", f"${(maint_m+other_m)*12:,.0f}")
-    pdf.row("Landlord Insurance:", f"${insurance_m*12:,.0f}", "Vacancy Allowance:", f"${(annual_gross_income * (vacancy_pct/100)):,.0f}")
-    pdf.ln(2)
+    # --- 3. EXPENSE ITEMIZATION (FIXED LOGIC) ---
+    vacancy_loss = (monthly_rent * 12) * (vacancy_pct / 100)
+    pdf.section_header("Annual Expense Itemization")
+    pdf.row("Property Mgt:", f"${mgt_fee_m*12:,.0f}", "Strata/Body Corp:", f"${strata_m*12:,.0f}")
+    pdf.row("Council Rates:", f"${rates_m*12:,.0f}", "Maintenance:", f"${maint_m*12:,.0f}")
+    pdf.row("Insurance:", f"${insurance_m*12:,.0f}", "Water/Other:", f"${(water_m + other_m)*12:,.0f}")
+    pdf.row("Vacancy Loss:", f"${vacancy_loss:,.0f}", "Annual Interest:", f"${annual_interest:,.0f}")
+    
     pdf.set_font("helvetica", "B", 11)
-    pdf.row("TOTAL ANNUAL EXPENSES:", f"${total_operating_expenses:,.0f}")
+    pdf.set_fill_color(245, 245, 245)
+    # Total Operating + Interest = Total Outgoings
+    pdf.cell(0, 8, f"  TOTAL ANNUAL OUTGOINGS: ${total_operating_expenses + annual_interest:,.0f}", ln=True, fill=True)
     pdf.ln(5)
 
-    # 4. TAX & DEPRECIATION
-    cash_on_cash = (post_tax_cashflow / cash_outlay) * 100
-    pdf.section_header("Tax Efficiency & Returns")
-    pdf.row("Total Depreciation:", f"${total_depreciation:,.0f}", "Tax Refund/Payable:", f"${total_tax_variance:,.0f}")
+    # --- 4. RETURNS & EFFICIENCY ---
+    cash_on_cash = (post_tax_cashflow / cash_outlay) * 100 if cash_outlay > 0 else 0
+    pdf.section_header("Investment Returns & Tax Efficiency")
     pdf.row("Gross Yield:", f"{(annual_gross_income/purchase_price)*100:.2f}%", "Cash-on-Cash Return:", f"{cash_on_cash:.2f}%")
+    pdf.row("Total Depreciation:", f"${total_depreciation:,.0f}", "Annual Tax Variance:", f"${total_tax_variance:,.0f}")
     pdf.ln(5)
 
-    # 5. CASH FLOW SUMMARY
-    pdf.section_header("Weekly Cash Flow Position")
-    pdf.row("Pre-Tax Cash Flow:", f"${pre_tax_cashflow:,.0f}", "Pre-Tax Weekly:", f"${pre_tax_cashflow/52:,.2f}")
-    pdf.row("Post-Tax Cash Flow:", f"${post_tax_cashflow:,.0f}", "Post-Tax Weekly:", f"${post_tax_cashflow/52:,.2f}")
-    pdf.ln(10)
+    # --- 5. CASH FLOW SUMMARY ---
+    pdf.section_header("Cash Flow Summary")
+    pdf.row("Annual Pre-Tax CF:", f"${pre_tax_cashflow:,.0f}", "Weekly Pre-Tax:", f"${pre_tax_cashflow/52:,.2f}")
+    pdf.row("Annual Post-Tax CF:", f"${post_tax_cashflow:,.0f}", "Weekly Post-Tax:", f"${post_tax_cashflow/52:,.2f}")
+    pdf.ln(8)
 
-    # 6. CHART
-    fig, ax = plt.subplots(figsize=(8, 3.5))
-    ax.fill_between(df_chart.index, df_chart["Property Value"], color="skyblue", alpha=0.3, label="Property Value")
-    ax.plot(df_chart.index, df_chart["Equity"], color="green", marker='o', label="Equity")
-    ax.set_title(f"{holding_period}-Year Wealth Accumulation Projection")
-    ax.set_ylabel("Value ($)")
-    ax.set_xlabel("Years Held")
-    ax.legend(loc="upper left")
+    # --- 6. CHART ---
+    fig, ax = plt.subplots(figsize=(8, 3.8))
+    ax.plot(df_chart.index, df_chart["Property Value"], label="Property Value", color="#1f77b4", linewidth=2)
+    ax.plot(df_chart.index, df_chart["Equity"], label="Equity", color="#2ca02c", linewidth=2)
+    ax.fill_between(df_chart.index, df_chart["Property Value"], alpha=0.1)
+    ax.set_title(f"{holding_period}-Year Projection")
     ax.grid(True, linestyle="--", alpha=0.5)
+    ax.legend()
     
     img_buffer = io.BytesIO()
     plt.savefig(img_buffer, format="png", bbox_inches="tight", dpi=150)
     pdf.image(img_buffer, x=15, w=180)
 
-    # 7. DISCLAIMER
-    pdf.set_y(-30)
+    # --- 7. DISCLAIMER ---
+    pdf.set_y(-25)
     pdf.set_font("helvetica", "I", 8)
     pdf.set_text_color(150, 150, 150)
-    disclaimer = "DISCLAIMER: This report is for illustrative purposes only and does not constitute financial advice. All projections are estimates based on user-provided data and market assumptions. Investors should seek professional independent advice before proceeding."
+    disclaimer = "DISCLAIMER: This report is a generated estimate. Projections are not guaranteed. Seek independent financial advice."
     pdf.multi_cell(0, 4, disclaimer, align="C")
 
     return bytes(pdf.output())
