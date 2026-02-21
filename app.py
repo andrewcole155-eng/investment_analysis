@@ -741,7 +741,7 @@ def generate_pdf(salary_1_annual, salary_2_annual, total_monthly_living, total_e
     pdf = InvestmentReportPDF()
     pdf.add_page()
     
-    # --- 1. PROPERTY HEADER ---
+    # --- 1. PROPERTY HEADER & ONLINE LINK ---
     pdf.set_font("helvetica", "B", 16)
     pdf.cell(0, 8, property_name, new_x="LMARGIN", new_y="NEXT")
     pdf.set_font("helvetica", "", 11)
@@ -754,51 +754,65 @@ def generate_pdf(salary_1_annual, salary_2_annual, total_monthly_living, total_e
         pdf.set_text_color(0, 0, 0) 
     pdf.ln(3)
 
-    # --- 2. INVESTOR HOUSEHOLD PROFILE ---
+    # --- 2. RESTORED: YIELD ANALYSIS & MARKET COMPARISON ---
+    pdf.section_header("Yield Analysis & Market Comparison (AI Estimated)")
+    pdf.row("Property Gross Yield:", f"{property_yield:.2f}%")
+    
+    if market_yield:
+        variance = property_yield - market_yield
+        pdf.set_text_color(0, 128, 0) if variance >= 0 else pdf.set_text_color(200, 0, 0)
+        status = f"{'Outperforming' if variance >= 0 else 'Underperforming'} by {abs(variance):.2f}%"
+        pdf.row("Est. Suburb Average:", f"{market_yield:.2f}%", "Market Status:", status)
+    else:
+        pdf.set_text_color(128, 128, 128)
+        pdf.row("Est. Suburb Average:", "Data Unavailable", "Market Status:", "N/A")
+    pdf.set_text_color(0, 0, 0)
+    pdf.ln(3)
+
+    # --- 3. PROPERTY PERFORMANCE (ANNUAL PRE-TAX) ---
+    pdf.section_header("Property Performance (Annual Pre-Tax)")
+    pdf.row("Gross Annual Rent:", f"${annual_gross_income:,.0f}", "Operating Expenses:", f"-${total_operating_expenses:,.0f}")
+    pdf.row("Loan Interest Expense:", f"-${annual_interest:,.0f}", "Net Property Cash Flow:", f"${pre_tax_cashflow:,.2f}")
+    pdf.ln(3)
+
+    # --- 4. INVESTOR HOUSEHOLD & NEGATIVE GEARING ---
     pdf.section_header("Investor Household Profile")
     pdf.row("Inv 1 Take-Home (Annual):", f"${salary_1_annual:,.0f}", "Ownership Split:", f"{ownership_split*100:.0f}% / {(1-ownership_split)*100:.0f}%")
     pdf.row("Inv 2 Take-Home (Annual):", f"${salary_2_annual:,.0f}", "Annual Depreciation:", f"${total_depreciation:,.0f}")
     
     pdf.set_font("helvetica", "I", 10)
     pdf.set_text_color(0, 102, 204)
-    pdf.cell(0, 7, f"Est. Additional Annual Tax Refund (Gearing): ${total_tax_variance:,.2f}", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 7, f"Est. Additional Annual Tax Refund (Negative Gearing): ${total_tax_variance:,.2f}", new_x="LMARGIN", new_y="NEXT")
     pdf.set_text_color(0, 0, 0)
     pdf.ln(3)
 
-# --- 3. PROPERTY PERFORMANCE (ANNUAL PRE-TAX) ---
-    pdf.section_header("Property Performance (Annual Pre-Tax)")
-    pdf.row("Gross Annual Rent:", f"${annual_gross_income:,.0f}", "Operating Expenses:", f"-${total_operating_expenses:,.0f}")
-    pdf.row("Loan Interest Expense:", f"-${annual_interest:,.0f}", "Net Property Cash Flow:", f"${pre_tax_cashflow:,.2f}")
-    pdf.ln(3)
-
-    # --- RESTORED: YIELD ANALYSIS & MARKET COMPARISON ---
-    pdf.section_header("Yield Analysis & Market Comparison (AI Estimated)")
-    pdf.row("Property Gross Yield:", f"{property_yield:.2f}%")
+    # --- 5. MONTHLY HOUSEHOLD SERVICEABILITY (CONSOLIDATED) ---
+    pdf.section_header("Monthly Household Serviceability")
     
-    if market_yield:
-        variance = property_yield - market_yield
-        if variance >= 0:
-            status = f"Outperforming by {variance:.2f}%"
-            pdf.set_text_color(0, 128, 0) # Green for outperforming
-        else:
-            status = f"Underperforming by {abs(variance):.2f}%"
-            pdf.set_text_color(200, 0, 0) # Red for underperforming
-            
-        pdf.row("Est. Suburb Average:", f"{market_yield:.2f}%", "Market Status:", status)
-    else:
-        pdf.set_text_color(128, 128, 128)
-        pdf.row("Est. Suburb Average:", "Data Unavailable", "Market Status:", "N/A")
-        
-    pdf.set_text_color(0, 0, 0) # Reset color to black for the next section
-    pdf.ln(3)
+    total_household_net_m = (salary_1_annual + salary_2_annual) / 12
+    shaded_rent_m = (monthly_rent * 0.80) 
+    new_mortgage_m = monthly_io if loan_type == "Interest Only" else monthly_pi
+    net_monthly_surplus = (total_household_net_m + shaded_rent_m) - (total_monthly_living + total_existing_debt_m + new_mortgage_m)
 
-    # --- 5. EXIT STRATEGY & CGT ---
-    pdf.section_header(f"Exit Strategy & CGT Projection (Year {holding_period})")
-    pdf.row("Est. Sale Price:", f"${future_values[-1]:,.0f}", "Gross Capital Gain:", f"${capital_gain:,.0f}")
-    pdf.row("Marginal Tax Rate:", f"{est_marginal_rate*100:.1f}%", "Est. CGT Payable:", f"${cgt_payable:,.0f}")
     pdf.set_font("helvetica", "B", 10)
-    pdf.row("NET PROFIT ON SALE:", f"${net_profit_on_sale:,.0f}")
-    pdf.ln(3)
+    pdf.cell(0, 7, "Serviceability Breakdown (Monthly):", new_x="LMARGIN", new_y="NEXT")
+    pdf.set_font("helvetica", "", 10)
+    
+    pdf.row("Take-Home Pay:", f"${total_household_net_m:,.2f}", "Living Expenses:", f"-${total_monthly_living:,.2f}")
+    pdf.row("Rental Income (80%):", f"${shaded_rent_m:,.2f}", "Existing Debts:", f"-${total_existing_debt_m:,.2f}")
+    pdf.row("New Property Loan:", f"-${new_mortgage_m:,.2f}")
+    
+    pdf.ln(2)
+    if net_monthly_surplus >= 0:
+        pdf.set_text_color(0, 128, 0)
+        pdf.set_font("helvetica", "B", 12)
+        pdf.cell(0, 10, f"ESTIMATED MONTHLY SURPLUS: ${net_monthly_surplus:,.2f}", align="R", new_x="LMARGIN", new_y="NEXT")
+    else:
+        pdf.set_text_color(200, 0, 0)
+        pdf.set_font("helvetica", "B", 12)
+        pdf.cell(0, 10, f"ESTIMATED MONTHLY DEFICIT: ${abs(net_monthly_surplus):,.2f}", align="R", new_x="LMARGIN", new_y="NEXT")
+    pdf.set_text_color(0, 0, 0)
+    pdf.ln(5)
 
     # --- 6. WEALTH MILESTONES ---
     pdf.section_header("Projected Wealth Milestones")
@@ -813,25 +827,8 @@ def generate_pdf(salary_1_annual, salary_2_annual, total_monthly_living, total_e
         if yr <= holding_period:
             val = purchase_price * (1 + growth_rate)**yr
             eq = val - loan_amount
-            pdf.cell(30, 7, f"Year {yr}", border=1, align="C")
-            pdf.cell(80, 7, f"${val:,.0f}", border=1, align="C")
-            pdf.cell(80, 7, f"${eq:,.0f}", border=1, align="C", new_x="LMARGIN", new_y="NEXT")
+            pdf.row(f"Year {yr}", f"${val:,.0f}", "", f"${eq:,.0f}")
     pdf.ln(5)
-
-    # --- 7. GROWTH CHART ---
-    fig, ax = plt.subplots(figsize=(8, 3.5)) 
-    ax.plot(df_chart.index, df_chart["Property Value"], label="Market Value", color="#003366", linewidth=2.5)
-    ax.plot(df_chart.index, df_chart["Equity"], label="Equity Position", color="#2ca02c", linewidth=2.5)
-    ax.fill_between(df_chart.index, df_chart["Equity"], color="#2ca02c", alpha=0.1)
-    ax.set_title(f"Equity Projection ({growth_rate*100:.1f}% Annual Growth)", fontsize=12, fontweight='bold')
-    ax.yaxis.set_major_formatter(ticker.FuncFormatter(lambda x, pos: f'${x:,.0f}'))
-    ax.grid(True, axis='y', linestyle="--", alpha=0.5)
-    ax.legend(frameon=False, loc="upper left")
-    
-    plt.tight_layout()
-    img_buffer = io.BytesIO()
-    plt.savefig(img_buffer, format="png", bbox_inches="tight", dpi=200) 
-    pdf.image(img_buffer, x=15, w=180)
 
     return bytes(pdf.output())
 
@@ -852,7 +849,7 @@ st.download_button(
     args=(property_name, property_url, {
         "purchase_price": purchase_price,
         "beds": beds, "baths": baths, "cars": cars,
-        "salary_1": salary_1_annual,
+        "salary_1": salary_1_annual, # Consistently use annual names
         "salary_2": salary_2_annual,
         "ownership_split": ownership_split,
         "growth_rate": growth_rate,
