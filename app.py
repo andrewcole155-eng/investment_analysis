@@ -16,6 +16,8 @@ st.markdown("---")
 # --- 1. GLOBAL INPUTS (SIDEBAR) ---
 st.sidebar.header("📍 Core Parameters")
 property_name = st.sidebar.text_input("Property Name/Address", value="2 Example Street MELBOURNE")
+# NEW: Property URL Input
+property_url = st.sidebar.text_input("Property Listing URL", value="https://www.realestate.com.au/")
 purchase_price = st.sidebar.number_input("Purchase Price ($)", value=650000, step=10000)
 
 st.sidebar.subheader("Tax Profiles (Joint Ownership)")
@@ -32,7 +34,7 @@ tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
     "Property & Acquisition", 
     "Income & Expenses", 
     "Loan Details",
-    "Cash Flow",          # <--- NEW TAB ADDED HERE
+    "Cash Flow",
     "Depreciation", 
     "Tax & Gearing", 
     "10-Year Projections",
@@ -42,6 +44,11 @@ tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
 # --- TAB 1: ACQUISITION ---
 with tab1:
     st.subheader("Initial Outlay")
+    
+    # Optional: Display the link in the app UI as well
+    if property_url:
+        st.markdown(f"🔗 **[View Real Estate Listing]({property_url})**")
+        
     col1, col2 = st.columns(2)
     stamp_duty = col1.number_input("Stamp Duty ($)", value=34100, step=1000)
     legal_fees = col2.number_input("Legal & Conveyancing ($)", value=1500, step=100)
@@ -124,10 +131,9 @@ with tab3:
         st.write(f"**Annual Repayment:** ${annual_io:,.2f}")
         st.markdown(f"**Total Savings of I only: <span style='color:green'>${savings_io:,.2f}</span>**", unsafe_allow_html=True)
 
-# --- TAB 4: CASH FLOW (NEWLY ADDED) ---
+# --- TAB 4: CASH FLOW ---
 with tab4:
     st.subheader("Pre-Tax Cash Flow")
-    st.caption("Matches your Excel 'Cash Flow' Worksheet")
     
     net_operating_income = annual_gross_income - total_operating_expenses
     pre_tax_cashflow = net_operating_income - annual_repayment
@@ -283,13 +289,21 @@ def generate_pdf():
     
     current_date = datetime.now().strftime("%d %B %Y")
     
+    # 0. Header with Property Info & Link
     pdf.set_font("helvetica", "B", 12)
     pdf.set_text_color(0, 0, 0)
-    pdf.cell(0, 8, f"Property: {property_name}", ln=True)
+    pdf.cell(0, 6, f"Property: {property_name}", ln=True)
+    
+    # Add clickable link if provided
+    if property_url and property_url.strip() != "":
+        pdf.set_font("helvetica", "U", 10)
+        pdf.set_text_color(0, 102, 204) # Blue hyperlink color
+        # This creates the clickable hyperlink in the PDF
+        pdf.cell(0, 6, "Click here to view the online property listing", ln=True, link=property_url)
     
     pdf.set_font("helvetica", "I", 10)
     pdf.set_text_color(100, 100, 100)
-    pdf.cell(0, 8, f"Report Generated: {current_date}", ln=True)
+    pdf.cell(0, 6, f"Report Generated: {current_date}", ln=True)
     pdf.ln(5)
     pdf.set_text_color(0, 0, 0) 
     
