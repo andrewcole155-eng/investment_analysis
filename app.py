@@ -858,7 +858,8 @@ def generate_pdf(salary_1_annual, salary_2_annual, total_monthly_living, total_e
             self.cell(0, 5, "*Disclaimer: Suburb yield and serviceability are estimates for guidance only.", align="C", new_x="LMARGIN", new_y="NEXT")
             self.cell(0, 5, f"Page {self.page_no()}", align="C")
 
-        fsection_header(self, title):
+        # FIXED TYPO HERE
+        def section_header(self, title):
             self.set_font("helvetica", "B", 13)
             self.set_fill_color(230, 240, 255)
             self.set_text_color(0, 0, 0)
