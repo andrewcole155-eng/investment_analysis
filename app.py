@@ -832,7 +832,7 @@ def generate_pdf(salary_1_annual, salary_2_annual, total_monthly_living, total_e
             self.set_font("helvetica", "B", 20)
             self.set_text_color(0, 51, 102)
             self.cell(40) 
-            self.cell(0, 15, "Investment Portfolio Analysis", new_x="LMARGIN", new_y="NEXT", align="L")
+            self.cell(0, 15, "Proposed Investment Property Analysis", new_x="LMARGIN", new_y="NEXT", align="L")
             self.ln(10)
 
         def footer(self):
