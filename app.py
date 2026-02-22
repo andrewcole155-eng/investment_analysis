@@ -98,7 +98,6 @@ if "form_data" not in st.session_state:
         "div_43": 9000.0, "div_40": 8500.0,
         "is_ai_estimated": False  # <-- NEW FLAG TO TRACK AI USAGE
     }
-    }
     
     # PRE-LOAD WIDGET KEYS TO PREVENT STREAMLIT WARNINGS
     st.session_state.sb_prop_name = "2 Example Street MELBOURNE"
