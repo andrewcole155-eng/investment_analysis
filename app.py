@@ -541,8 +541,8 @@ with tab6:
     
     # --- NEW: Gross Income Inputs for Accurate Tax Brackets ---
     g1, g2 = st.columns(2)
-    gross_income_1 = g1.number_input("Inv 1 Gross Taxable Income ($)", value=130000.0, step=5000.0, key="gross_1")
-    gross_income_2 = g2.number_input("Inv 2 Gross Taxable Income ($)", value=90000.0, step=5000.0, key="gross_2")
+    gross_income_1 = g1.number_input("Inv 1 Gross Taxable Income ($)", value=99,106.28, step=5000.0, key="gross_1")
+    gross_income_2 = g2.number_input("Inv 2 Gross Taxable Income ($)", value=101,157.96, step=5000.0, key="gross_2")
 
     def calculate_tax(income):
         if income <= 18200: return 0
