@@ -95,7 +95,9 @@ if "form_data" not in st.session_state:
         "monthly_rent": 3683.33, "vacancy_pct": 5.0, "mgt_fee_m": 276.25,
         "strata_m": 500.0, "insurance_m": 45.0, "rates_m": 165.0,
         "maint_m": 150.0, "water_m": 80.0, "other_m": 25.0,
-        "div_43": 9000.0, "div_40": 8500.0
+        "div_43": 9000.0, "div_40": 8500.0,
+        "is_ai_estimated": False  # <-- NEW FLAG TO TRACK AI USAGE
+    }
     }
     
     # PRE-LOAD WIDGET KEYS TO PREVENT STREAMLIT WARNINGS
@@ -292,7 +294,6 @@ if st.sidebar.button("Auto-Estimate Fields", use_container_width=True):
     with st.spinner("Analyzing location and property specs..."):
         estimates = fetch_comprehensive_estimates(property_name, purchase_price, beds, baths, cars)
         if estimates:
-            # Update session state with AI values, retaining fallbacks just in case
             st.session_state.form_data.update({
                 "stamp_duty": float(estimates.get("stamp_duty", 34100.0)),
                 "legal_fees": float(estimates.get("legal_fees", 1500.0)),
@@ -307,7 +308,8 @@ if st.sidebar.button("Auto-Estimate Fields", use_container_width=True):
                 "water_m": float(estimates.get("water_m", 80.0)),
                 "div_43": float(estimates.get("div_43", 9000.0)),
                 "div_40": float(estimates.get("div_40", 8500.0)),
-                "growth": float(estimates.get("expected_annual_growth", st.session_state.form_data["growth"]))
+                "growth": float(estimates.get("expected_annual_growth", st.session_state.form_data["growth"])),
+                "is_ai_estimated": True  # <-- FLIP FLAG TO TRUE
             })
             st.sidebar.success("Fields updated!")
             st.rerun() # Refresh app to show new numbers
@@ -806,6 +808,10 @@ st.markdown("---")
 st.subheader("📄 Export Analysis Report")
 
 def generate_pdf(salary_1_annual, salary_2_annual, total_monthly_living, total_existing_debt_m):
+    # 1. ADD THESE TWO LINES RIGHT HERE AT THE TOP
+    is_ai = st.session_state.form_data.get("is_ai_estimated", False)
+    ai_tag = " (AI Estimated)" if is_ai else " (Manual/Default)"
+
     market_yield = fetch_market_yield(property_name, beds, baths, cars)
     property_yield = (annual_gross_income / purchase_price) * 100
 
@@ -860,7 +866,9 @@ def generate_pdf(salary_1_annual, salary_2_annual, total_monthly_living, total_e
     pdf.ln(3)
 
     # --- 1. ACQUISITION & FINANCE ---
-    pdf.section_header("1. Acquisition & Finance (100% Debt Funded Structure)")
+    # 2. UPDATE THIS HEADER TO INCLUDE THE AI TAG
+    pdf.section_header(f"1. Acquisition & Finance (100% Debt Funded Structure){ai_tag}")
+    
     pdf.row("Purchase Price:", f"${purchase_price:,.0f}", "Core Loan Amount:", f"${loan_amount:,.0f} ({lvr_pct*100:.0f}% LVR)")
     
     if use_equity:
@@ -887,7 +895,9 @@ def generate_pdf(salary_1_annual, salary_2_annual, total_monthly_living, total_e
     pdf.set_text_color(0, 0, 0); pdf.ln(3)
 
     # --- 3. PROPERTY PERFORMANCE ---
-    pdf.section_header("3. Property Performance (Annual Pre-Tax)")
+    # 3. UPDATE THIS HEADER TO INCLUDE THE AI TAG
+    pdf.section_header(f"3. Property Performance (Annual Pre-Tax){ai_tag}")
+    
     if actual_cash_outlay > 0:
         cash_on_cash = f"{(pre_tax_cashflow / actual_cash_outlay) * 100:.2f}%"
     else:
@@ -1018,7 +1028,8 @@ save_data = {
     "water_m": water_m,
     "other_m": other_m,
     "div_43": div_43,
-    "div_40": div_40
+    "div_40": div_40,
+    "is_ai_estimated": st.session_state.form_data.get("is_ai_estimated", False) # <-- SAVE TO CSV
 }
 
 col_save, col_dl = st.columns(2)
