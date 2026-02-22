@@ -296,6 +296,44 @@ def fetch_tax_strategy_summary(address, gross_1, gross_2, split, net_tax_loss, p
         return None
 
 
+# --- GLOBAL TAX CALCULATORS ---
+def calculate_tax(gross_income):
+    """Calculates standard Australian income tax (excluding Medicare levy)."""
+    if gross_income <= 18200: return 0
+    elif gross_income <= 45000: return (gross_income - 18200) * 0.16
+    elif gross_income <= 135000: return 4288 + (gross_income - 45000) * 0.30
+    elif gross_income <= 190000: return 31288 + (gross_income - 135000) * 0.37
+    else: return 51638 + (gross_income - 190000) * 0.45
+
+def calculate_gross_from_net(net_income):
+    """Mathematically reverse-engineers the tax brackets to find Gross Pay from Take-Home Pay."""
+    if net_income <= 18200: 
+        return net_income
+    elif net_income <= 40712: # Max net for $45k bracket
+        return (net_income - 2912) / 0.84
+    elif net_income <= 103712: # Max net for $135k bracket
+        return (net_income - 9212) / 0.70
+    elif net_income <= 138362: # Max net for $190k bracket
+        return (net_income - 18662) / 0.63
+    else: # Highest bracket
+        return (net_income - 33862) / 0.55
+
+# --- 2. CREATE TABS ---
+# Reordered to put Summary first
+tab0, tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10 = st.tabs([
+    "📊 Summary Dashboard",
+    "Property & Acquisition", 
+    "Income & Expenses", 
+    "Loan Details",
+    "Cash Flow",
+    "Depreciation", 
+    "Tax & Gearing", 
+    "10-Year Projections",
+    "CGT Projection",
+    "Search History",
+    "Living Expenses"  # NEW TAB
+])
+
 # --- 1. GLOBAL INPUTS (SIDEBAR) ---
 st.sidebar.header("📍 Core Parameters")
 
@@ -373,44 +411,6 @@ if st.sidebar.button("Auto-Estimate Fields", use_container_width=True):
         else:
             # Graceful failure message
             st.sidebar.error("AI failed to return valid data. Check your terminal logs for the error.")
-
-# --- GLOBAL TAX CALCULATORS ---
-def calculate_tax(gross_income):
-    """Calculates standard Australian income tax (excluding Medicare levy)."""
-    if gross_income <= 18200: return 0
-    elif gross_income <= 45000: return (gross_income - 18200) * 0.16
-    elif gross_income <= 135000: return 4288 + (gross_income - 45000) * 0.30
-    elif gross_income <= 190000: return 31288 + (gross_income - 135000) * 0.37
-    else: return 51638 + (gross_income - 190000) * 0.45
-
-def calculate_gross_from_net(net_income):
-    """Mathematically reverse-engineers the tax brackets to find Gross Pay from Take-Home Pay."""
-    if net_income <= 18200: 
-        return net_income
-    elif net_income <= 40712: # Max net for $45k bracket
-        return (net_income - 2912) / 0.84
-    elif net_income <= 103712: # Max net for $135k bracket
-        return (net_income - 9212) / 0.70
-    elif net_income <= 138362: # Max net for $190k bracket
-        return (net_income - 18662) / 0.63
-    else: # Highest bracket
-        return (net_income - 33862) / 0.55
-
-# --- 2. CREATE TABS ---
-# Reordered to put Summary first
-tab0, tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10 = st.tabs([
-    "📊 Summary Dashboard",
-    "Property & Acquisition", 
-    "Income & Expenses", 
-    "Loan Details",
-    "Cash Flow",
-    "Depreciation", 
-    "Tax & Gearing", 
-    "10-Year Projections",
-    "CGT Projection",
-    "Search History",
-    "Living Expenses"  # NEW TAB
-])
 
 # --- PRE-CALCULATE HOUSEHOLD OBLIGATIONS FOR ALL TABS ---
 # 1. Living Expenses Calculation
@@ -864,7 +864,7 @@ def generate_pdf(salary_1_annual, salary_2_annual, total_monthly_living, total_e
             self.set_fill_color(230, 240, 255)
             self.set_text_color(0, 0, 0)
             self.cell(0, 10, f"  {title}", fill=True, new_x="LMARGIN", new_y="NEXT")
-            self.ln(2)
+            self.ln(2)d
 
         def row(self, label, value, label2="", value2=""):
             self.set_font("helvetica", "", 10)
@@ -872,7 +872,7 @@ def generate_pdf(salary_1_annual, salary_2_annual, total_monthly_living, total_e
             self.set_font("helvetica", "B", 10)
             self.cell(45, 7, str(value), border=0)
             if label2:
-                self.set_font("helvetica", "", 10)
+                self.set_font("helvetica", "", 10)def calculate_tax
                 self.cell(50, 7, label2, border=0)
                 self.set_font("helvetica", "B", 10)
                 self.cell(0, 7, str(value2), border=0, new_x="LMARGIN", new_y="NEXT")
