@@ -76,7 +76,6 @@ def save_to_history(name, url, params):
     history_df.to_csv(HISTORY_FILE, index=False)
 
 # --- 1. SESSION STATE (FIXED FOR RAW INPUTS & EQUITY LOAN) ---
-# --- 1. SESSION STATE (FIXED FOR RAW INPUTS & EQUITY LOAN) ---
 if "form_data" not in st.session_state:
     st.session_state.form_data = {
         "prop_name": "2 Example Street MELBOURNE",
@@ -89,7 +88,14 @@ if "form_data" not in st.session_state:
         "growth": 4.0, "hold": 10,
         "living_expenses_json": json.dumps(DEFAULT_LIVING_EXPENSES_DATA),
         "ext_mortgage": 2921.0, "ext_car_loan": 0.0, "ext_cc": 0.0, "ext_other": 0.0,
-        "use_eq": True, "eq_amount": 170000.0, "eq_rate": 6.20 
+        "use_eq": True, "eq_amount": 170000.0, "eq_rate": 6.20,
+        # NEW AI-DRIVEN DEFAULTS:
+        "stamp_duty": 34100.0, "legal_fees": 1500.0, "building_pest": 600.0,
+        "loan_setup": 500.0, "buyers_agent": 5000.0, "other_entry": 1000.0,
+        "monthly_rent": 3683.33, "vacancy_pct": 5.0, "mgt_fee_m": 276.25,
+        "strata_m": 500.0, "insurance_m": 45.0, "rates_m": 165.0,
+        "maint_m": 150.0, "water_m": 80.0, "other_m": 25.0,
+        "div_43": 9000.0, "div_40": 8500.0
     }
     
     # PRE-LOAD WIDGET KEYS TO PREVENT STREAMLIT WARNINGS
@@ -175,6 +181,49 @@ def fetch_market_yield(address, beds, baths, cars):
         # Fails gracefully if API is down, key is missing, or parsing fails
         return None
 
+# --- COMPREHENSIVE AI ESTIMATOR ---
+@st.cache_data(ttl=3600, show_spinner=False)
+def fetch_comprehensive_estimates(address, price, beds, baths, cars):
+    """Fetches comprehensive property estimates returned as a JSON object."""
+    try:
+        api_key = st.secrets["GEMINI_API_KEY"]
+        genai.configure(api_key=api_key)
+        
+        # Using gemini-2.0-flash as per system preference
+        model = genai.GenerativeModel('gemini-2.0-flash') 
+        
+        prompt = f"""
+        You are an expert Australian real estate AI. Provide realistic estimated investment figures for a {beds} bed, {baths} bath, {cars} car property located in '{address}' purchasing for ${price}.
+        
+        Return ONLY a valid JSON object with the following exact keys and numerical values (no symbols, no text outside the JSON). If exact data is unknown, provide realistic state/suburb averages:
+        {{
+            "stamp_duty": (estimated stamp duty for this state/price),
+            "legal_fees": (estimated legal and conveyancing),
+            "building_pest": (estimated building and pest inspection),
+            "monthly_rent": (estimated monthly rental income),
+            "vacancy_pct": (estimated vacancy rate as a percentage, e.g., 4.5),
+            "mgt_fee_m": (estimated monthly property management fee in $),
+            "strata_m": (estimated monthly strata/body corp in $, use 0 if it's likely a standalone house),
+            "insurance_m": (estimated monthly landlord insurance in $),
+            "rates_m": (estimated monthly council rates in $),
+            "maint_m": (estimated monthly maintenance in $),
+            "water_m": (estimated monthly water service in $),
+            "div_43": (estimated annual capital works depreciation in $),
+            "div_40": (estimated annual plant & equipment depreciation in $),
+            "expected_annual_growth": (estimated capital growth percentage, e.g., 5.0)
+        }}
+        """
+        
+        # Force JSON response to ensure it parses perfectly into Streamlit
+        response = model.generate_content(
+            prompt,
+            generation_config={"response_mime_type": "application/json"}
+        )
+        
+        return json.loads(response.text)
+    except Exception as e:
+        return None
+
 # --- 1. GLOBAL INPUTS (SIDEBAR) ---
 st.sidebar.header("📍 Core Parameters")
 
@@ -216,6 +265,35 @@ st.sidebar.subheader("Projections")
 growth_rate_val = st.sidebar.slider("Expected Annual Growth (%)", 0.0, 12.0, st.session_state.form_data["growth"], step=0.5)
 growth_rate = growth_rate_val / 100
 holding_period = st.sidebar.slider("Holding Period (Years)", 1, 30, st.session_state.form_data["hold"])
+
+# --- AI AUTO-FILL TRIGGER ---
+st.sidebar.markdown("---")
+st.sidebar.subheader("✨ AI Automation")
+if st.sidebar.button("Auto-Estimate Fields", use_container_width=True):
+    with st.spinner("Analyzing location and property specs..."):
+        estimates = fetch_comprehensive_estimates(property_name, purchase_price, beds, baths, cars)
+        if estimates:
+            # Update session state with AI values, retaining fallbacks just in case
+            st.session_state.form_data.update({
+                "stamp_duty": float(estimates.get("stamp_duty", 34100.0)),
+                "legal_fees": float(estimates.get("legal_fees", 1500.0)),
+                "building_pest": float(estimates.get("building_pest", 600.0)),
+                "monthly_rent": float(estimates.get("monthly_rent", 3683.33)),
+                "vacancy_pct": float(estimates.get("vacancy_pct", 5.0)),
+                "mgt_fee_m": float(estimates.get("mgt_fee_m", 276.25)),
+                "strata_m": float(estimates.get("strata_m", 500.0)),
+                "insurance_m": float(estimates.get("insurance_m", 45.0)),
+                "rates_m": float(estimates.get("rates_m", 165.0)),
+                "maint_m": float(estimates.get("maint_m", 150.0)),
+                "water_m": float(estimates.get("water_m", 80.0)),
+                "div_43": float(estimates.get("div_43", 9000.0)),
+                "div_40": float(estimates.get("div_40", 8500.0)),
+                "growth": float(estimates.get("expected_annual_growth", st.session_state.form_data["growth"]))
+            })
+            st.sidebar.success("Fields updated!")
+            st.rerun() # Refresh app to show new numbers
+        else:
+            st.sidebar.error("Failed to fetch estimates.")
 
 # --- GLOBAL TAX CALCULATOR ---
 def calculate_tax(income):
@@ -265,12 +343,12 @@ with tab1:
         st.markdown(f"🔗 **[View Real Estate Listing]({property_url})**")
         
     col1, col2 = st.columns(2)
-    stamp_duty = col1.number_input("Stamp Duty ($)", value=34100, step=1000)
-    legal_fees = col2.number_input("Legal & Conveyancing ($)", value=1500, step=100)
-    building_pest = col1.number_input("Building & Pest ($)", value=600, step=50)
-    loan_setup = col2.number_input("Loan Setup Fees ($)", value=500, step=50)
-    buyers_agent = col1.number_input("Buyers Agent ($)", value=5000, step=500)
-    other_entry = col2.number_input("Other Entry Costs ($)", value=1000, step=100)
+    stamp_duty = col1.number_input("Stamp Duty ($)", value=st.session_state.form_data["stamp_duty"], step=1000.0)
+    legal_fees = col2.number_input("Legal & Conveyancing ($)", value=st.session_state.form_data["legal_fees"], step=100.0)
+    building_pest = col1.number_input("Building & Pest ($)", value=st.session_state.form_data["building_pest"], step=50.0)
+    loan_setup = col2.number_input("Loan Setup Fees ($)", value=st.session_state.form_data["loan_setup"], step=50.0)
+    buyers_agent = col1.number_input("Buyers Agent ($)", value=st.session_state.form_data["buyers_agent"], step=500.0)
+    other_entry = col2.number_input("Other Entry Costs ($)", value=st.session_state.form_data["other_entry"], step=100.0)
     
     total_acquisition_costs = stamp_duty + legal_fees + building_pest + loan_setup + buyers_agent + other_entry
     total_cost_base = purchase_price + total_acquisition_costs
@@ -283,17 +361,17 @@ with tab2:
     st.subheader("Cash Flow Essentials (Monthly Sourced)")
     c1, c2 = st.columns(2)
     
-    monthly_rent = c1.number_input("Monthly Rent Received ($)", value=3683.33, step=100.0)
-    vacancy_pct = c1.number_input("Vacancy Rate (%)", value=5.0, step=1.0)
+    monthly_rent = c1.number_input("Monthly Rent Received ($)", value=st.session_state.form_data["monthly_rent"], step=100.0)
+    vacancy_pct = c1.number_input("Vacancy Rate (%)", value=st.session_state.form_data["vacancy_pct"], step=1.0)
     annual_gross_income = (monthly_rent * 12) * (1 - (vacancy_pct / 100))
     
-    mgt_fee_m = c2.number_input("Property Management (Monthly $)", value=276.25, step=10.0)
-    strata_m = c2.number_input("Strata/Body Corporate (Monthly $)", value=500.00, step=10.0)
-    insurance_m = c2.number_input("Landlord Insurance (Monthly $)", value=45.00, step=5.0)
-    rates_m = c2.number_input("Council Rates (Monthly $)", value=165.00, step=10.0)
-    maint_m = c2.number_input("Maintenance (Monthly $)", value=150.00, step=10.0)
-    water_m = c2.number_input("Water Service (Monthly $)", value=80.00, step=5.0)
-    other_m = c2.number_input("Other (Monthly $)", value=25.00, step=5.0)
+    mgt_fee_m = c2.number_input("Property Management (Monthly $)", value=st.session_state.form_data["mgt_fee_m"], step=10.0)
+    strata_m = c2.number_input("Strata/Body Corporate (Monthly $)", value=st.session_state.form_data["strata_m"], step=10.0)
+    insurance_m = c2.number_input("Landlord Insurance (Monthly $)", value=st.session_state.form_data["insurance_m"], step=5.0)
+    rates_m = c2.number_input("Council Rates (Monthly $)", value=st.session_state.form_data["rates_m"], step=10.0)
+    maint_m = c2.number_input("Maintenance (Monthly $)", value=st.session_state.form_data["maint_m"], step=10.0)
+    water_m = c2.number_input("Water Service (Monthly $)", value=st.session_state.form_data["water_m"], step=5.0)
+    other_m = c2.number_input("Other (Monthly $)", value=st.session_state.form_data["other_m"], step=5.0)
     
     total_monthly_expenses = mgt_fee_m + strata_m + insurance_m + rates_m + maint_m + water_m + other_m
     total_operating_expenses = total_monthly_expenses * 12
@@ -380,8 +458,8 @@ with tab4:
 # --- TAB 5: DEPRECIATION ---
 with tab5:
     st.subheader("Tax Depreciation (Non-Cash Deductions)")
-    div_43 = st.number_input("Capital Works (Div 43) ($)", value=9000, step=500)
-    div_40 = st.number_input("Plant & Equipment (Div 40) ($)", value=8500, step=500)
+    div_43 = st.number_input("Capital Works (Div 43) ($)", value=st.session_state.form_data["div_43"], step=500.0)
+    div_40 = st.number_input("Plant & Equipment (Div 40) ($)", value=st.session_state.form_data["div_40"], step=500.0)
     total_depreciation = div_43 + div_40
     st.metric("Total Annual Depreciation", f"${total_depreciation:,.2f}")
 
@@ -659,7 +737,7 @@ with tab10:
     ext_other = d4.number_input("Other Loans ($)", step=50.0, key="sb_ext_other")
     
     total_existing_debt_m = ext_mortgage + ext_car_loan + ext_cc + ext_other
-    
+    s
     st.divider()
     
     # --- NEW: SERVICING OVERVIEW ---
