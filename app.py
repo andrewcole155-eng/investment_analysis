@@ -872,7 +872,7 @@ def generate_pdf(salary_1_annual, salary_2_annual, total_monthly_living, total_e
             self.set_font("helvetica", "B", 10)
             self.cell(45, 7, str(value), border=0)
             if label2:
-                self.set_font("helvetica", "", 10)def calculate_tax
+                self.set_font("helvetica", "", 10)
                 self.cell(50, 7, label2, border=0)
                 self.set_font("helvetica", "B", 10)
                 self.cell(0, 7, str(value2), border=0, new_x="LMARGIN", new_y="NEXT")
