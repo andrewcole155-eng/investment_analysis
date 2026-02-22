@@ -257,6 +257,13 @@ def fetch_tax_strategy_summary(address, gross_1, gross_2, split, net_tax_loss, p
         high_earner = "Investor 1" if gross_1 > gross_2 else "Investor 2"
         high_gross = max(gross_1, gross_2)
         
+        # Calculate dynamic tax bracket based on current stage 3 cuts
+        if high_gross > 190000: marginal_rate = 45
+        elif high_gross > 135000: marginal_rate = 37
+        elif high_gross > 45000: marginal_rate = 30
+        elif high_gross > 18200: marginal_rate = 16
+        else: marginal_rate = 0
+        
         # Calculate Tax Savings Efficiency
         out_of_pocket = abs(pre_tax_cashflow) if pre_tax_cashflow < 0 else 0
         tse = (total_tax_variance / out_of_pocket) * 100 if out_of_pocket > 0 else 0
@@ -264,21 +271,22 @@ def fetch_tax_strategy_summary(address, gross_1, gross_2, split, net_tax_loss, p
         prompt = f"""
         Act as an Australian Tax Strategist. Based on the property data and the dual-investor profile provided, generate a detailed expansion for 'Section 3: Property Performance' of the Investment Report.
 
+        STRICT RULE: Do NOT calculate or invent your own numbers. USE ONLY the exact Context Variables provided below. Do not recalculate the tax refund.
+
         Context Variables:
         - Property: {address}
         - Investor 1 Gross Income: ${gross_1:,.0f}
         - Investor 2 Gross Income: ${gross_2:,.0f}
         - Ownership Split: {split*100}% to Investor 1
         - Total Annual Taxable Property Loss: ${abs(net_tax_loss):,.0f}
-        - Pre-Tax Cash Flow: ${pre_tax_cashflow:,.0f}
-        - Total Tax Refund: ${total_tax_variance:,.0f}
+        - Pre-Tax Cash Flow: ${pre_tax_cashflow:,.2f}
+        - Total Tax Refund: ${total_tax_variance:,.2f}
         - Tax Savings Efficiency: {tse:.1f}%
 
         Instructions:
-        1. Performance Expansion: Analyze the Pre-Tax vs. Post-Tax Cash Flow. Explain how the 'paper loss' (Depreciation + Interest) converts a negative pre-tax position into a stronger household net position. Mention the calculated Tax Savings Efficiency.
-        2. High-Income Earner Strategy (Focus on {high_earner} earning ${high_gross:,.0f}): Detail Marginal Relief (how every $1 of property loss offsets their specific salary reducing tax at their highest marginal rate), Medicare Levy Impact (2% saving), and Optimal Ownership Rationale (explain why the split maximizes 'Tax Arbitrage' between high-income tax savings today and discounted CGT in the future).
-        3. Tone & Format: Use professional, clinical financial language. 
-        CRITICAL FORMATTING REQUIREMENT: Return ONLY plain text separated by double line breaks for new paragraphs. Do NOT use markdown bolding (**), hash symbols (#), bullet points, or any other markdown styling, as it will cause errors in the PDF renderer.
+        1. Performance Expansion: Analyze the Pre-Tax vs. Post-Tax Cash Flow using ONLY the exact Pre-Tax Cash Flow and Total Tax Refund numbers provided above. Explain how the 'paper loss' converts a negative position into a stronger net position. Mention the calculated Tax Savings Efficiency.
+        2. High-Income Earner Strategy: Focus on {high_earner} earning ${high_gross:,.0f}. Detail how the property loss offsets their income at their specific {marginal_rate}% marginal tax rate. Mention the additional 2% Medicare Levy saving. Explain why the split maximizes 'Tax Arbitrage'.
+        3. Tone & Format: Professional financial language. Return ONLY plain text separated by double line breaks for new paragraphs. Do NOT use markdown bolding (**), hash symbols (#), or bullet points, as this will crash the PDF compiler.
         """
         
         response = model.generate_content(prompt)
@@ -315,12 +323,14 @@ s2_freq = col_s2_freq.selectbox("Freq", ["Monthly", "Fortnightly", "Annually"], 
 
 # --- Mapping for annualization ---
 freq_map = {"Monthly": 12, "Fortnightly": 26, "Annually": 1}
-salary_1_annual = float(s1_input * freq_map[s1_freq])
-salary_2_annual = float(s2_input * freq_map[s2_freq])
-salary_1 = salary_1_annual
-salary_2 = salary_2_annual
+salary_1_annual = float(s1_input * freq_map[s1_freq]) # This is NET
+salary_2_annual = float(s2_input * freq_map[s2_freq]) # This is NET
 annual_net_1 = salary_1_annual 
 annual_net_2 = salary_2_annual
+
+# NEW: Automatically reverse-calculate Gross Income from the Net Inputs
+gross_income_1 = calculate_gross_from_net(annual_net_1)
+gross_income_2 = calculate_gross_from_net(annual_net_2)
 
 ownership_split_val = st.sidebar.slider("Ownership Split (Inv 1 %)", 0, 100, st.session_state.form_data["split"])
 ownership_split = ownership_split_val / 100
@@ -364,14 +374,27 @@ if st.sidebar.button("Auto-Estimate Fields", use_container_width=True):
             # Graceful failure message
             st.sidebar.error("AI failed to return valid data. Check your terminal logs for the error.")
 
-# --- GLOBAL TAX CALCULATOR ---
-def calculate_tax(income):
+# --- GLOBAL TAX CALCULATORS ---
+def calculate_tax(gross_income):
     """Calculates standard Australian income tax (excluding Medicare levy)."""
-    if income <= 18200: return 0
-    elif income <= 45000: return (income - 18200) * 0.16
-    elif income <= 135000: return 4288 + (income - 45000) * 0.30
-    elif income <= 190000: return 31288 + (income - 135000) * 0.37
-    else: return 51638 + (income - 190000) * 0.45
+    if gross_income <= 18200: return 0
+    elif gross_income <= 45000: return (gross_income - 18200) * 0.16
+    elif gross_income <= 135000: return 4288 + (gross_income - 45000) * 0.30
+    elif gross_income <= 190000: return 31288 + (gross_income - 135000) * 0.37
+    else: return 51638 + (gross_income - 190000) * 0.45
+
+def calculate_gross_from_net(net_income):
+    """Mathematically reverse-engineers the tax brackets to find Gross Pay from Take-Home Pay."""
+    if net_income <= 18200: 
+        return net_income
+    elif net_income <= 40712: # Max net for $45k bracket
+        return (net_income - 2912) / 0.84
+    elif net_income <= 103712: # Max net for $135k bracket
+        return (net_income - 9212) / 0.70
+    elif net_income <= 138362: # Max net for $190k bracket
+        return (net_income - 18662) / 0.63
+    else: # Highest bracket
+        return (net_income - 33862) / 0.55
 
 # --- 2. CREATE TABS ---
 # Reordered to put Summary first
@@ -537,19 +560,12 @@ with tab5:
 # --- TAB 6: TAX, GEARING & SERVICEABILITY ---
 with tab6:
     st.subheader("Household Tax Impact & Cash Flow")
-    st.info("💡 **Note:** To calculate accurate negative gearing benefits, the ATO applies property losses against your **Pre-Tax (Gross)** income. Enter your Gross incomes below.")
+    st.info("💡 **Note:** To calculate accurate negative gearing benefits, your Gross Taxable incomes have been automatically reverse-calculated from your Take-Home inputs in the sidebar.")
     
-    # --- NEW: Gross Income Inputs for Accurate Tax Brackets ---
+    # --- Auto-Calculated Gross Income Display ---
     g1, g2 = st.columns(2)
-    gross_income_1 = g1.number_input("Inv 1 Gross Taxable Income ($)", value=132197.47, step=5000.0, key="gross_1") # Andrew
-    gross_income_2 = g2.number_input("Inv 2 Gross Taxable Income ($)", value=135239.28, step=5000.0, key="gross_2") # Angel-Rose
-
-    def calculate_tax(income):
-        if income <= 18200: return 0
-        elif income <= 45000: return (income - 18200) * 0.16
-        elif income <= 135000: return 4288 + (income - 45000) * 0.30
-        elif income <= 190000: return 31288 + (income - 135000) * 0.37
-        else: return 51638 + (income - 190000) * 0.45
+    g1.metric("Inv 1 Auto-Calculated Gross", f"${gross_income_1:,.2f}", help="Calculated from sidebar take-home pay")
+    g2.metric("Inv 2 Auto-Calculated Gross", f"${gross_income_2:,.2f}", help="Calculated from sidebar take-home pay")
 
     # 1. Tax & Gearing Calculations
     total_tax_deductions = total_operating_expenses + annual_interest + total_depreciation
@@ -558,7 +574,7 @@ with tab6:
     property_income_1 = net_property_taxable_income * ownership_split
     property_income_2 = net_property_taxable_income * (1 - ownership_split)
     
-    # --- FIX: Tax Variance now uses Gross Income ---
+    # Tax Variance now uses the mathematically precise Gross Income
     base_tax_1 = calculate_tax(gross_income_1)
     new_tax_1 = calculate_tax(max(0, gross_income_1 + property_income_1))
     tax_variance_1 = base_tax_1 - new_tax_1
@@ -842,7 +858,7 @@ def generate_pdf(salary_1_annual, salary_2_annual, total_monthly_living, total_e
             self.cell(0, 5, "*Disclaimer: Suburb yield and serviceability are estimates for guidance only.", align="C", new_x="LMARGIN", new_y="NEXT")
             self.cell(0, 5, f"Page {self.page_no()}", align="C")
 
-        def section_header(self, title):
+        fsection_header(self, title):
             self.set_font("helvetica", "B", 13)
             self.set_fill_color(230, 240, 255)
             self.set_text_color(0, 0, 0)
@@ -1037,11 +1053,11 @@ pdf_bytes = generate_pdf(
     salary_2_annual, 
     total_monthly_living, 
     total_existing_debt_m,
-    gross_income_1,
-    gross_income_2,
-    net_property_taxable_income,
-    pre_tax_cashflow,
-    total_tax_variance
+    gross_income_1,                # Pushes Andrew's 132k value to the AI
+    gross_income_2,                # Pushes Angel-Rose's 135k value to the AI
+    net_property_taxable_income,   # Ensures the loss math matches the table
+    pre_tax_cashflow,              # Ensures the cash flow math matches the table
+    total_tax_variance             # Ensures the refund math matches the table
 )
 
 # Package all raw inputs securely to stop Revisit Math bugs
