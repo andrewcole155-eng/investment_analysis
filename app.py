@@ -217,24 +217,23 @@ def fetch_comprehensive_estimates(address, price, beds, baths, cars):
         
         Return ONLY a valid JSON object with the following exact keys and numerical values (no symbols, no text outside the JSON). If exact data is unknown, provide realistic state/suburb averages:
         {{
-            "stamp_duty": (estimated stamp duty for this state/price),
-            "legal_fees": (estimated legal and conveyancing),
-            "building_pest": (estimated building and pest inspection),
-            "monthly_rent": (estimated monthly rental income),
-            "vacancy_pct": (estimated vacancy rate as a percentage, e.g., 4.5),
-            "mgt_fee_m": (estimated monthly property management fee in $),
-            "strata_m": (estimated monthly strata/body corp in $, use 0 if it's likely a standalone house),
-            "insurance_m": (estimated monthly landlord insurance in $),
-            "rates_m": (estimated monthly council rates in $),
-            "maint_m": (estimated monthly maintenance in $),
-            "water_m": (estimated monthly water service in $),
-            "div_43": (estimated annual capital works depreciation in $),
-            "div_40": (estimated annual plant & equipment depreciation in $),
-            "expected_annual_growth": (estimated capital growth percentage, e.g., 5.0)
+            "stamp_duty": 34100.0,
+            "legal_fees": 1500.0,
+            "building_pest": 600.0,
+            "monthly_rent": 3683.33,
+            "vacancy_pct": 5.0,
+            "mgt_fee_m": 276.25,
+            "strata_m": 500.0,
+            "insurance_m": 45.0,
+            "rates_m": 165.0,
+            "maint_m": 150.0,
+            "water_m": 80.0,
+            "div_43": 9000.0,
+            "div_40": 8500.0,
+            "expected_annual_growth": 5.0
         }}
         """
         
-        # Force JSON response to ensure it parses perfectly into Streamlit
         response = model.generate_content(
             prompt,
             generation_config={"response_mime_type": "application/json"}
@@ -242,6 +241,8 @@ def fetch_comprehensive_estimates(address, price, beds, baths, cars):
         
         return json.loads(response.text)
     except Exception as e:
+        # Print the exact error to your terminal/console so you can debug it
+        print(f"⚠️ AI API Error: {e}")
         return None
 
 # --- 1. GLOBAL INPUTS (SIDEBAR) ---
