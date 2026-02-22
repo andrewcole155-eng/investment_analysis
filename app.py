@@ -758,7 +758,6 @@ with tab10:
     ext_other = d4.number_input("Other Loans ($)", step=50.0, key="sb_ext_other")
     
     total_existing_debt_m = ext_mortgage + ext_car_loan + ext_cc + ext_other
-    s
     st.divider()
     
     # --- NEW: SERVICING OVERVIEW ---
