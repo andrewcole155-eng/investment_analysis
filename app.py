@@ -864,7 +864,7 @@ def generate_pdf(salary_1_annual, salary_2_annual, total_monthly_living, total_e
             self.set_fill_color(230, 240, 255)
             self.set_text_color(0, 0, 0)
             self.cell(0, 10, f"  {title}", fill=True, new_x="LMARGIN", new_y="NEXT")
-            self.ln(2)d
+            self.ln(2)
 
         def row(self, label, value, label2="", value2=""):
             self.set_font("helvetica", "", 10)
