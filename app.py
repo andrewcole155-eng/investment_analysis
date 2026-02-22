@@ -383,6 +383,9 @@ with tab2:
     monthly_rent = c1.number_input("Monthly Rent Received ($)", value=float(st.session_state.form_data.get("monthly_rent", 3683.33)), step=100.0)
     vacancy_pct = c1.number_input("Vacancy Rate (%)", value=float(st.session_state.form_data.get("vacancy_pct", 5.0)), step=1.0)
     
+    # ---> THE MISSING MATH LINE IS BACK <---
+    annual_gross_income = (monthly_rent * 12) * (1 - (vacancy_pct / 100))
+    
     mgt_fee_m = c2.number_input("Property Management (Monthly $)", value=float(st.session_state.form_data.get("mgt_fee_m", 276.25)), step=10.0)
     strata_m = c2.number_input("Strata/Body Corporate (Monthly $)", value=float(st.session_state.form_data.get("strata_m", 500.0)), step=10.0)
     insurance_m = c2.number_input("Landlord Insurance (Monthly $)", value=float(st.session_state.form_data.get("insurance_m", 45.0)), step=5.0)
@@ -391,6 +394,7 @@ with tab2:
     water_m = c2.number_input("Water Service (Monthly $)", value=float(st.session_state.form_data.get("water_m", 80.0)), step=5.0)
     other_m = c2.number_input("Other (Monthly $)", value=float(st.session_state.form_data.get("other_m", 25.0)), step=5.0)
     
+    # ---> THE EXPENSE MATH LINES ARE BACK <---
     total_monthly_expenses = mgt_fee_m + strata_m + insurance_m + rates_m + maint_m + water_m + other_m
     total_operating_expenses = total_monthly_expenses * 12
     
@@ -399,7 +403,6 @@ with tab2:
     metric_col1.metric("Gross Annual Income", f"${annual_gross_income:,.2f}")
     metric_col2.metric("Total Annual Expenses", f"${total_operating_expenses:,.2f}")
 
-# --- TAB 3: LOAN DETAILS (UPDATED FOR EQUITY FUNDING) ---
 # --- TAB 3: LOAN DETAILS (UPDATED FOR EQUITY FUNDING) ---
 with tab3:
     st.subheader("1. Core Investment Loan (Secured by Investment)")
