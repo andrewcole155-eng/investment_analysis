@@ -292,8 +292,12 @@ st.sidebar.markdown("---")
 st.sidebar.subheader("✨ AI Automation")
 if st.sidebar.button("Auto-Estimate Fields", use_container_width=True):
     with st.spinner("Analyzing location and property specs..."):
+        # Clear the cache so it forces a fresh API call if it failed previously
+        fetch_comprehensive_estimates.clear()
         estimates = fetch_comprehensive_estimates(property_name, purchase_price, beds, baths, cars)
-        if estimates:
+        
+        # CRITICAL FIX: Explicitly check that estimates is a valid dictionary
+        if estimates and isinstance(estimates, dict):
             st.session_state.form_data.update({
                 "stamp_duty": float(estimates.get("stamp_duty", 34100.0)),
                 "legal_fees": float(estimates.get("legal_fees", 1500.0)),
@@ -309,12 +313,13 @@ if st.sidebar.button("Auto-Estimate Fields", use_container_width=True):
                 "div_43": float(estimates.get("div_43", 9000.0)),
                 "div_40": float(estimates.get("div_40", 8500.0)),
                 "growth": float(estimates.get("expected_annual_growth", st.session_state.form_data["growth"])),
-                "is_ai_estimated": True  # <-- FLIP FLAG TO TRUE
+                "is_ai_estimated": True
             })
             st.sidebar.success("Fields updated!")
-            st.rerun() # Refresh app to show new numbers
+            st.rerun() 
         else:
-            st.sidebar.error("Failed to fetch estimates.")
+            # Graceful failure message
+            st.sidebar.error("AI failed to return valid data. Check your terminal logs for the error.")
 
 # --- GLOBAL TAX CALCULATOR ---
 def calculate_tax(income):
@@ -921,34 +926,53 @@ def generate_pdf(salary_1_annual, salary_2_annual, total_monthly_living, total_e
     total_household_net_m = (salary_1_annual + salary_2_annual) / 12
     shaded_rent_m = (monthly_rent * 0.80) 
     core_mortgage_m = monthly_io if loan_type == "Interest Only" else monthly_pi
-    total_new_loan_repayments = core_mortgage_m + eq_monthly_pi # Combines both loans
     prop_expenses_m = total_operating_expenses / 12
     
-    net_monthly_surplus = (total_household_net_m + shaded_rent_m) - (total_monthly_living + total_existing_debt_m + total_new_loan_repayments + prop_expenses_m)
+    # 1. Real World Math
+    net_monthly_surplus = (total_household_net_m + shaded_rent_m) - (total_monthly_living + total_existing_debt_m + core_mortgage_m + eq_monthly_pi + prop_expenses_m)
 
-    pdf.set_font("helvetica", "B", 10); pdf.cell(0, 7, "Serviceability Breakdown (Monthly):", new_x="LMARGIN", new_y="NEXT"); pdf.set_font("helvetica", "", 10)
-    pdf.row("Take-Home Pay:", f"${total_household_net_m:,.2f}", "Living Expenses:", f"-${total_monthly_living:,.2f}")
-    pdf.row("Rental Income (80%):", f"${shaded_rent_m:,.2f}", "Existing Debts (PPOR):", f"-${total_existing_debt_m:,.2f}")
-    pdf.row("All New Loan Repayments:", f"-${total_new_loan_repayments:,.2f}", "Prop. Operating Exp:", f"-${prop_expenses_m:,.2f}")
-    
-    # Stress Test (+3% APRA Buffer on BOTH loans P&I)
+    # 2. Bank Stress Test Math (+3% on new loans, +30% repayment buffer on existing mortgage)
     stress_core_pi = abs(npf.pmt((interest_rate+0.03)/12, loan_term*12, loan_amount))
     stress_eq_pi = abs(npf.pmt((eq_rate+0.03)/12, 30*12, eq_amount)) if use_equity else 0
-    stress_surplus = (total_household_net_m + shaded_rent_m) - (total_monthly_living + total_existing_debt_m + stress_core_pi + stress_eq_pi + prop_expenses_m)
+    stressed_existing_mortgage = ext_mortgage * 1.30 
+    stressed_other_debt = total_existing_debt_m - ext_mortgage
+    total_stressed_existing = stressed_existing_mortgage + stressed_other_debt
     
+    bank_assessed_surplus = (total_household_net_m + shaded_rent_m) - (total_monthly_living + total_stressed_existing + stress_core_pi + stress_eq_pi + prop_expenses_m)
+
+    # Print the distinct breakdown
+    pdf.set_font("helvetica", "B", 10); pdf.cell(0, 7, "Serviceability Breakdown (Monthly):", new_x="LMARGIN", new_y="NEXT"); pdf.set_font("helvetica", "", 10)
+    pdf.row("Take-Home Pay:", f"${total_household_net_m:,.2f}", "Living Expenses:", f"-${total_monthly_living:,.2f}")
+    pdf.row("Rental Income (80%):", f"${shaded_rent_m:,.2f}", "Prop. Operating Exp:", f"-${prop_expenses_m:,.2f}")
+    
+    # Splitting out the loans
+    pdf.row("Existing Debts (PPOR):", f"-${total_existing_debt_m:,.2f}", "New Equity Loan:", f"-${eq_monthly_pi:,.2f}" if use_equity else "$0.00")
+    pdf.row("New Core Loan:", f"-${core_mortgage_m:,.2f}", "", "")
+    
+    pdf.ln(2)
+    
+    # Print Real-World Surplus (Green/Red)
+    if net_monthly_surplus >= 0:
+        pdf.set_text_color(0, 128, 0); pdf.set_font("helvetica", "B", 11)
+        pdf.cell(0, 7, f"REAL-WORLD MONTHLY SURPLUS: ${net_monthly_surplus:,.2f}", align="R", new_x="LMARGIN", new_y="NEXT")
+    else:
+        pdf.set_text_color(200, 0, 0); pdf.set_font("helvetica", "B", 11)
+        pdf.cell(0, 7, f"REAL-WORLD MONTHLY DEFICIT: ${abs(net_monthly_surplus):,.2f}", align="R", new_x="LMARGIN", new_y="NEXT")
+        
+    # Print Bank Assessed Surplus (Blue/Red)
+    if bank_assessed_surplus >= 0:
+        pdf.set_text_color(0, 102, 204); pdf.set_font("helvetica", "B", 11)
+        pdf.cell(0, 7, f"BANK ASSESSED SURPLUS (Stressed): ${bank_assessed_surplus:,.2f}", align="R", new_x="LMARGIN", new_y="NEXT")
+    else:
+        pdf.set_text_color(200, 0, 0); pdf.set_font("helvetica", "B", 11)
+        pdf.cell(0, 7, f"BANK ASSESSED DEFICIT (Stressed): ${abs(bank_assessed_surplus):,.2f}", align="R", new_x="LMARGIN", new_y="NEXT")
+    
+    # DTI and Disclaimer
     total_new_debt_amount = loan_amount + eq_amount
     dti = total_new_debt_amount / (salary_1_annual + salary_2_annual) if (salary_1_annual + salary_2_annual) > 0 else 0
 
-    pdf.ln(2)
-    if net_monthly_surplus >= 0:
-        pdf.set_text_color(0, 128, 0); pdf.set_font("helvetica", "B", 12)
-        pdf.cell(0, 8, f"ESTIMATED MONTHLY SURPLUS: ${net_monthly_surplus:,.2f}", align="R", new_x="LMARGIN", new_y="NEXT")
-    else:
-        pdf.set_text_color(200, 0, 0); pdf.set_font("helvetica", "B", 12)
-        pdf.cell(0, 8, f"ESTIMATED MONTHLY DEFICIT: ${abs(net_monthly_surplus):,.2f}", align="R", new_x="LMARGIN", new_y="NEXT")
-    
     pdf.set_text_color(100, 100, 100); pdf.set_font("helvetica", "I", 9)
-    pdf.cell(0, 5, f"New Debt to Net Income (DTI): {dti:.1f}x   |   Bank Stress Test (+3% P&I): ${stress_surplus:,.2f} Surplus/Deficit", align="R", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 5, f"New Debt to Net Income (DTI): {dti:.1f}x  |  Bank assessment assumes +3% P&I and +30% on existing mortgages", align="R", new_x="LMARGIN", new_y="NEXT")
     pdf.set_text_color(0, 0, 0); pdf.ln(3)
 
     # --- 5. EXIT STRATEGY ---
