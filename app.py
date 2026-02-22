@@ -135,7 +135,26 @@ def load_property(row):
         "ext_other": float(row.get("ext_other", 0.0)),
         "use_eq": bool(row.get("use_eq", True)),
         "eq_amount": float(row.get("eq_amount", 170000.0)),
-        "eq_rate": float(row.get("eq_rate", 6.20))
+        "eq_rate": float(row.get("eq_rate", 6.20)),
+        
+        # NEW AI-DRIVEN FIELDS WITH FALLBACKS:
+        "stamp_duty": float(row.get("stamp_duty", 34100.0)),
+        "legal_fees": float(row.get("legal_fees", 1500.0)),
+        "building_pest": float(row.get("building_pest", 600.0)),
+        "loan_setup": float(row.get("loan_setup", 500.0)),
+        "buyers_agent": float(row.get("buyers_agent", 5000.0)),
+        "other_entry": float(row.get("other_entry", 1000.0)),
+        "monthly_rent": float(row.get("monthly_rent", 3683.33)),
+        "vacancy_pct": float(row.get("vacancy_pct", 5.0)),
+        "mgt_fee_m": float(row.get("mgt_fee_m", 276.25)),
+        "strata_m": float(row.get("strata_m", 500.0)),
+        "insurance_m": float(row.get("insurance_m", 45.0)),
+        "rates_m": float(row.get("rates_m", 165.0)),
+        "maint_m": float(row.get("maint_m", 150.0)),
+        "water_m": float(row.get("water_m", 80.0)),
+        "other_m": float(row.get("other_m", 25.0)),
+        "div_43": float(row.get("div_43", 9000.0)),
+        "div_40": float(row.get("div_40", 8500.0))
     }
 
     st.session_state.sb_prop_name = st.session_state.form_data["prop_name"]
@@ -343,12 +362,12 @@ with tab1:
         st.markdown(f"🔗 **[View Real Estate Listing]({property_url})**")
         
     col1, col2 = st.columns(2)
-    stamp_duty = col1.number_input("Stamp Duty ($)", value=st.session_state.form_data["stamp_duty"], step=1000.0)
-    legal_fees = col2.number_input("Legal & Conveyancing ($)", value=st.session_state.form_data["legal_fees"], step=100.0)
-    building_pest = col1.number_input("Building & Pest ($)", value=st.session_state.form_data["building_pest"], step=50.0)
-    loan_setup = col2.number_input("Loan Setup Fees ($)", value=st.session_state.form_data["loan_setup"], step=50.0)
-    buyers_agent = col1.number_input("Buyers Agent ($)", value=st.session_state.form_data["buyers_agent"], step=500.0)
-    other_entry = col2.number_input("Other Entry Costs ($)", value=st.session_state.form_data["other_entry"], step=100.0)
+    stamp_duty = col1.number_input("Stamp Duty ($)", value=float(st.session_state.form_data.get("stamp_duty", 34100.0)), step=1000.0)
+    legal_fees = col2.number_input("Legal & Conveyancing ($)", value=float(st.session_state.form_data.get("legal_fees", 1500.0)), step=100.0)
+    building_pest = col1.number_input("Building & Pest ($)", value=float(st.session_state.form_data.get("building_pest", 600.0)), step=50.0)
+    loan_setup = col2.number_input("Loan Setup Fees ($)", value=float(st.session_state.form_data.get("loan_setup", 500.0)), step=50.0)
+    buyers_agent = col1.number_input("Buyers Agent ($)", value=float(st.session_state.form_data.get("buyers_agent", 5000.0)), step=500.0)
+    other_entry = col2.number_input("Other Entry Costs ($)", value=float(st.session_state.form_data.get("other_entry", 1000.0)), step=100.0)
     
     total_acquisition_costs = stamp_duty + legal_fees + building_pest + loan_setup + buyers_agent + other_entry
     total_cost_base = purchase_price + total_acquisition_costs
@@ -361,17 +380,16 @@ with tab2:
     st.subheader("Cash Flow Essentials (Monthly Sourced)")
     c1, c2 = st.columns(2)
     
-    monthly_rent = c1.number_input("Monthly Rent Received ($)", value=st.session_state.form_data["monthly_rent"], step=100.0)
-    vacancy_pct = c1.number_input("Vacancy Rate (%)", value=st.session_state.form_data["vacancy_pct"], step=1.0)
-    annual_gross_income = (monthly_rent * 12) * (1 - (vacancy_pct / 100))
+    monthly_rent = c1.number_input("Monthly Rent Received ($)", value=float(st.session_state.form_data.get("monthly_rent", 3683.33)), step=100.0)
+    vacancy_pct = c1.number_input("Vacancy Rate (%)", value=float(st.session_state.form_data.get("vacancy_pct", 5.0)), step=1.0)
     
-    mgt_fee_m = c2.number_input("Property Management (Monthly $)", value=st.session_state.form_data["mgt_fee_m"], step=10.0)
-    strata_m = c2.number_input("Strata/Body Corporate (Monthly $)", value=st.session_state.form_data["strata_m"], step=10.0)
-    insurance_m = c2.number_input("Landlord Insurance (Monthly $)", value=st.session_state.form_data["insurance_m"], step=5.0)
-    rates_m = c2.number_input("Council Rates (Monthly $)", value=st.session_state.form_data["rates_m"], step=10.0)
-    maint_m = c2.number_input("Maintenance (Monthly $)", value=st.session_state.form_data["maint_m"], step=10.0)
-    water_m = c2.number_input("Water Service (Monthly $)", value=st.session_state.form_data["water_m"], step=5.0)
-    other_m = c2.number_input("Other (Monthly $)", value=st.session_state.form_data["other_m"], step=5.0)
+    mgt_fee_m = c2.number_input("Property Management (Monthly $)", value=float(st.session_state.form_data.get("mgt_fee_m", 276.25)), step=10.0)
+    strata_m = c2.number_input("Strata/Body Corporate (Monthly $)", value=float(st.session_state.form_data.get("strata_m", 500.0)), step=10.0)
+    insurance_m = c2.number_input("Landlord Insurance (Monthly $)", value=float(st.session_state.form_data.get("insurance_m", 45.0)), step=5.0)
+    rates_m = c2.number_input("Council Rates (Monthly $)", value=float(st.session_state.form_data.get("rates_m", 165.0)), step=10.0)
+    maint_m = c2.number_input("Maintenance (Monthly $)", value=float(st.session_state.form_data.get("maint_m", 150.0)), step=10.0)
+    water_m = c2.number_input("Water Service (Monthly $)", value=float(st.session_state.form_data.get("water_m", 80.0)), step=5.0)
+    other_m = c2.number_input("Other (Monthly $)", value=float(st.session_state.form_data.get("other_m", 25.0)), step=5.0)
     
     total_monthly_expenses = mgt_fee_m + strata_m + insurance_m + rates_m + maint_m + water_m + other_m
     total_operating_expenses = total_monthly_expenses * 12
@@ -458,8 +476,8 @@ with tab4:
 # --- TAB 5: DEPRECIATION ---
 with tab5:
     st.subheader("Tax Depreciation (Non-Cash Deductions)")
-    div_43 = st.number_input("Capital Works (Div 43) ($)", value=st.session_state.form_data["div_43"], step=500.0)
-    div_40 = st.number_input("Plant & Equipment (Div 40) ($)", value=st.session_state.form_data["div_40"], step=500.0)
+    div_43 = st.number_input("Capital Works (Div 43) ($)", value=float(st.session_state.form_data.get("div_43", 9000.0)), step=500.0)
+    div_40 = st.number_input("Plant & Equipment (Div 40) ($)", value=float(st.session_state.form_data.get("div_40", 8500.0)), step=500.0)
     total_depreciation = div_43 + div_40
     st.metric("Total Annual Depreciation", f"${total_depreciation:,.2f}")
 
@@ -964,6 +982,7 @@ def generate_pdf(salary_1_annual, salary_2_annual, total_monthly_living, total_e
 pdf_bytes = generate_pdf(salary_1_annual, salary_2_annual, total_monthly_living, total_existing_debt_m)
 
 # Package all raw inputs securely to stop Revisit Math bugs
+# Package all raw inputs securely to stop Revisit Math bugs
 save_data = {
     "purchase_price": purchase_price,
     "beds": beds, "baths": baths, "cars": cars,
@@ -979,7 +998,25 @@ save_data = {
     "ext_other": ext_other,
     "use_eq": use_equity,
     "eq_amount": eq_amount,
-    "eq_rate": eq_rate * 100 # Save as percentage
+    "eq_rate": eq_rate * 100, 
+    # ADD THE NEW ONES HERE:
+    "stamp_duty": stamp_duty,
+    "legal_fees": legal_fees,
+    "building_pest": building_pest,
+    "loan_setup": loan_setup,
+    "buyers_agent": buyers_agent,
+    "other_entry": other_entry,
+    "monthly_rent": monthly_rent,
+    "vacancy_pct": vacancy_pct,
+    "mgt_fee_m": mgt_fee_m,
+    "strata_m": strata_m,
+    "insurance_m": insurance_m,
+    "rates_m": rates_m,
+    "maint_m": maint_m,
+    "water_m": water_m,
+    "other_m": other_m,
+    "div_43": div_43,
+    "div_40": div_40
 }
 
 col_save, col_dl = st.columns(2)
