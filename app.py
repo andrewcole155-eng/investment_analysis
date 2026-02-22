@@ -245,6 +245,49 @@ def fetch_comprehensive_estimates(address, price, beds, baths, cars):
         print(f"⚠️ AI API Error: {e}")
         return None
 
+# --- NEW: AI TAX STRATEGY SUMMARY ---
+@st.cache_data(ttl=3600, show_spinner=False)
+def fetch_tax_strategy_summary(address, gross_1, gross_2, split, net_tax_loss, pre_tax_cashflow, total_tax_variance):
+    """Fetches a strategic tax summary for the PDF report using Gemini."""
+    try:
+        api_key = st.secrets["GEMINI_API_KEY"]
+        genai.configure(api_key=api_key)
+        model = genai.GenerativeModel('gemini-2.0-flash')
+
+        high_earner = "Investor 1" if gross_1 > gross_2 else "Investor 2"
+        high_gross = max(gross_1, gross_2)
+        
+        # Calculate Tax Savings Efficiency
+        out_of_pocket = abs(pre_tax_cashflow) if pre_tax_cashflow < 0 else 0
+        tse = (total_tax_variance / out_of_pocket) * 100 if out_of_pocket > 0 else 0
+
+        prompt = f"""
+        Act as an Australian Tax Strategist. Based on the property data and the dual-investor profile provided, generate a detailed expansion for 'Section 3: Property Performance' of the Investment Report.
+
+        Context Variables:
+        - Property: {address}
+        - Investor 1 Gross Income: ${gross_1:,.0f}
+        - Investor 2 Gross Income: ${gross_2:,.0f}
+        - Ownership Split: {split*100}% to Investor 1
+        - Total Annual Taxable Property Loss: ${abs(net_tax_loss):,.0f}
+        - Pre-Tax Cash Flow: ${pre_tax_cashflow:,.0f}
+        - Total Tax Refund: ${total_tax_variance:,.0f}
+        - Tax Savings Efficiency: {tse:.1f}%
+
+        Instructions:
+        1. Performance Expansion: Analyze the Pre-Tax vs. Post-Tax Cash Flow. Explain how the 'paper loss' (Depreciation + Interest) converts a negative pre-tax position into a stronger household net position. Mention the calculated Tax Savings Efficiency.
+        2. High-Income Earner Strategy (Focus on {high_earner} earning ${high_gross:,.0f}): Detail Marginal Relief (how every $1 of property loss offsets their specific salary reducing tax at their highest marginal rate), Medicare Levy Impact (2% saving), and Optimal Ownership Rationale (explain why the split maximizes 'Tax Arbitrage' between high-income tax savings today and discounted CGT in the future).
+        3. Tone & Format: Use professional, clinical financial language. 
+        CRITICAL FORMATTING REQUIREMENT: Return ONLY plain text separated by double line breaks for new paragraphs. Do NOT use markdown bolding (**), hash symbols (#), bullet points, or any other markdown styling, as it will cause errors in the PDF renderer.
+        """
+        
+        response = model.generate_content(prompt)
+        return response.text.strip()
+    except Exception as e:
+        print(f"⚠️ AI API Error (Tax Strategy): {e}")
+        return None
+
+
 # --- 1. GLOBAL INPUTS (SIDEBAR) ---
 st.sidebar.header("📍 Core Parameters")
 
@@ -494,46 +537,13 @@ with tab5:
 # --- TAB 6: TAX, GEARING & SERVICEABILITY ---
 with tab6:
     st.subheader("Household Tax Impact & Cash Flow")
+    st.info("💡 **Note:** To calculate accurate negative gearing benefits, the ATO applies property losses against your **Pre-Tax (Gross)** income. Enter your Gross incomes below.")
     
-    def calculate_tax(income):
-        if income <= 18200: return 0
-        elif income <= 45000: return (income - 18200) * 0.16
-        elif income <= 135000: return 4288 + (income - 45000) * 0.30
-        elif income <= 190000: return 31288 + (income - 135000) * 0.37
-        else: return 51638 + (income - 190000) * 0.45
+    # --- NEW: Gross Income Inputs for Accurate Tax Brackets ---
+    g1, g2 = st.columns(2)
+    gross_income_1 = g1.number_input("Inv 1 Gross Taxable Income ($)", value=130000.0, step=5000.0, key="gross_1")
+    gross_income_2 = g2.number_input("Inv 2 Gross Taxable Income ($)", value=90000.0, step=5000.0, key="gross_2")
 
-    # Use combined interest for massive negative gearing boost
-    total_tax_deductions = total_operating_expenses + total_tax_deductible_interest + total_depreciation
-    net_property_taxable_income = annual_gross_income - total_tax_deductions
-    
-    property_income_1 = net_property_taxable_income * ownership_split
-    property_income_2 = net_property_taxable_income * (1 - ownership_split)
-    
-    base_tax_1 = calculate_tax(salary_1)
-    new_tax_1 = calculate_tax(max(0, salary_1 + property_income_1))
-    tax_variance_1 = base_tax_1 - new_tax_1
-    
-    base_tax_2 = calculate_tax(salary_2)
-    new_tax_2 = calculate_tax(max(0, salary_2 + property_income_2))
-    tax_variance_2 = base_tax_2 - new_tax_2
-    
-    total_tax_variance = tax_variance_1 + tax_variance_2
-    post_tax_cashflow = pre_tax_cashflow + total_tax_variance
-
-    t_col1, t_col2 = st.columns(2)
-    t_col1.metric("Pre-Tax Cash Flow (Annual)", f"${pre_tax_cashflow:,.2f}")
-    if total_tax_variance > 0:
-        t_col2.metric("Combined Estimated Tax Refund", f"${total_tax_variance:,.2f}")
-    else:
-        t_col2.metric("Combined Estimated Tax Payable", f"${abs(total_tax_variance):,.2f}")
-        
-    st.metric("Household Net Post-Tax Cash Flow (Annual)", f"${post_tax_cashflow:,.2f}")
-
-# --- TAB 6: TAX, GEARING & SERVICEABILITY ---
-with tab6:
-    st.subheader("Household Tax Impact & Cash Flow")
-    st.info("💡 **Note:** Negative Gearing benefits are estimated based on your Take-Home pay figures. To calculate these, the app treats your inputs as the base taxable income.")
-    
     def calculate_tax(income):
         if income <= 18200: return 0
         elif income <= 45000: return (income - 18200) * 0.16
@@ -548,18 +558,20 @@ with tab6:
     property_income_1 = net_property_taxable_income * ownership_split
     property_income_2 = net_property_taxable_income * (1 - ownership_split)
     
-    base_tax_1 = calculate_tax(salary_1)
-    new_tax_1 = calculate_tax(max(0, salary_1 + property_income_1))
+    # --- FIX: Tax Variance now uses Gross Income ---
+    base_tax_1 = calculate_tax(gross_income_1)
+    new_tax_1 = calculate_tax(max(0, gross_income_1 + property_income_1))
     tax_variance_1 = base_tax_1 - new_tax_1
     
-    base_tax_2 = calculate_tax(salary_2)
-    new_tax_2 = calculate_tax(max(0, salary_2 + property_income_2))
+    base_tax_2 = calculate_tax(gross_income_2)
+    new_tax_2 = calculate_tax(max(0, gross_income_2 + property_income_2))
     tax_variance_2 = base_tax_2 - new_tax_2
     
     total_tax_variance = tax_variance_1 + tax_variance_2
     post_tax_cashflow = pre_tax_cashflow + total_tax_variance
 
     # Display Tax Metrics
+    st.divider()
     t_col1, t_col2 = st.columns(2)
     t_col1.metric("Pre-Tax Cash Flow (Annual)", f"${pre_tax_cashflow:,.2f}")
     
@@ -572,7 +584,7 @@ with tab6:
 
     st.divider()
 
-    # 2. COMPREHENSIVE SERVICEABILITY CHECK
+    # 2. COMPREHENSIVE SERVICEABILITY CHECK (Remains based on Take-Home Pay)
     st.subheader("🏦 Household Serviceability Check")
     st.markdown("This section evaluates if the household can support this loan after factoring in all living expenses and existing debts.")
 
@@ -591,7 +603,7 @@ with tab6:
     # Display Serviceability Dashboard
     srv_col1, srv_col2 = st.columns(2)
     with srv_col1:
-        st.write("**Monthly Inflows**")
+        st.write("**Monthly Inflows (Take-Home)**")
         st.write(f"Total Net Salaries: `${total_net_salary_m:,.2f}`")
         st.write(f"Shaded Rental Income (80%): `${shaded_rent_m:,.2f}`")
         st.markdown(f"**Total Inflow: ${total_monthly_inflow:,.2f}**")
@@ -606,13 +618,6 @@ with tab6:
         st.success(f"### ✅ Serviceable\nMonthly household surplus: **${monthly_surplus:,.2f}**")
     else:
         st.error(f"### ⚠️ Warning: Deficit\nMonthly household deficit: **${abs(monthly_surplus):,.2f}**")
-
-    st.divider()
-
-    if monthly_surplus > 0:
-        st.success(f"### ✅ Serviceable\nYour household has an estimated monthly surplus of **${monthly_surplus:,.2f}**.")
-    else:
-        st.error(f"### ⚠️ Serviceability Warning\nYour household has an estimated monthly deficit of **${abs(monthly_surplus):,.2f}**. This loan may be difficult to service under current bank assessment criteria.")
 
 # --- TAB 7: 10-YEAR PROJECTIONS ---
 with tab7:
@@ -812,7 +817,7 @@ with tab10:
 st.markdown("---")
 st.subheader("📄 Export Analysis Report")
 
-def generate_pdf(salary_1_annual, salary_2_annual, total_monthly_living, total_existing_debt_m):
+def generate_pdf(salary_1_annual, salary_2_annual, total_monthly_living, total_existing_debt_m, gross_1, gross_2, net_taxable_income, pre_tax_cf, tax_variance):
     # 1. ADD THESE TWO LINES RIGHT HERE AT THE TOP
     is_ai = st.session_state.form_data.get("is_ai_estimated", False)
     ai_tag = " (AI Estimated)" if is_ai else " (Manual/Default)"
@@ -900,11 +905,10 @@ def generate_pdf(salary_1_annual, salary_2_annual, total_monthly_living, total_e
     pdf.set_text_color(0, 0, 0); pdf.ln(3)
 
     # --- 3. PROPERTY PERFORMANCE ---
-    # 3. UPDATE THIS HEADER TO INCLUDE THE AI TAG
     pdf.section_header(f"3. Property Performance (Annual Pre-Tax){ai_tag}")
     
     if actual_cash_outlay > 0:
-        cash_on_cash = f"{(pre_tax_cashflow / actual_cash_outlay) * 100:.2f}%"
+        cash_on_cash = f"{(pre_tax_cf / actual_cash_outlay) * 100:.2f}%"
     else:
         cash_on_cash = "Infinite (100% Financed)"
 
@@ -913,13 +917,26 @@ def generate_pdf(salary_1_annual, salary_2_annual, total_monthly_living, total_e
     pdf.cell(95, 4, "", border=0); pdf.cell(0, 4, f"(Strata: ${strata_m*12:,.0f} | Mgt: ${mgt_fee_m*12:,.0f} | Other: ${(rates_m+water_m+insurance_m+maint_m+other_m)*12:,.0f})", border=0, new_x="LMARGIN", new_y="NEXT")
     pdf.set_text_color(0, 0, 0); pdf.ln(1)
     
-    pdf.row("Total Interest Deductible:", f"-${total_tax_deductible_interest:,.0f}", "Net Property Cash Flow:", f"${pre_tax_cashflow:,.2f}")
+    pdf.row("Total Interest Deductible:", f"-${total_tax_deductible_interest:,.0f}", "Net Property Cash Flow:", f"${pre_tax_cf:,.2f}")
     
     pdf.set_font("helvetica", "I", 10); pdf.set_text_color(0, 102, 204)
     pdf.cell(50, 7, "Cash-on-Cash Return:", border=0); pdf.set_font("helvetica", "B", 10); pdf.cell(45, 7, f"{cash_on_cash}", border=0)
     pdf.set_font("helvetica", "I", 10); pdf.cell(50, 7, "Est. Additional Tax Refund:", border=0); pdf.set_font("helvetica", "B", 10)
-    pdf.cell(0, 7, f"${total_tax_variance:,.2f}", border=0, new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 7, f"${tax_variance:,.2f}", border=0, new_x="LMARGIN", new_y="NEXT")
     pdf.set_text_color(0, 0, 0); pdf.ln(3)
+
+    # --- INJECT AI TAX STRATEGY HERE ---
+    pdf.section_header("Strategic Taxation Analysis (AI Generated)")
+    tax_strategy_text = fetch_tax_strategy_summary(property_name, gross_1, gross_2, ownership_split, net_taxable_income, pre_tax_cf, tax_variance)
+    
+    pdf.set_font("helvetica", "", 10)
+    if tax_strategy_text:
+        # FPDF handles multi_cell for paragraph wrapping. Cleaned to prevent unicode/smart-quote crashes.
+        clean_text = tax_strategy_text.encode('latin-1', 'replace').decode('latin-1')
+        pdf.multi_cell(0, 6, clean_text)
+    else:
+        pdf.multi_cell(0, 6, "AI Tax Strategy could not be generated at this time. Please check your API limits or connection.")
+    pdf.ln(5)
 
     # --- 4. HOUSEHOLD SERVICEABILITY ---
     pdf.section_header("4. Monthly Household Serviceability")
@@ -1015,7 +1032,17 @@ def generate_pdf(salary_1_annual, salary_2_annual, total_monthly_living, total_e
     return bytes(pdf.output())
 
 # Generate PDF safely outside of column wrappers
-pdf_bytes = generate_pdf(salary_1_annual, salary_2_annual, total_monthly_living, total_existing_debt_m)
+pdf_bytes = generate_pdf(
+    salary_1_annual, 
+    salary_2_annual, 
+    total_monthly_living, 
+    total_existing_debt_m,
+    gross_income_1,
+    gross_income_2,
+    net_property_taxable_income,
+    pre_tax_cashflow,
+    total_tax_variance
+)
 
 # Package all raw inputs securely to stop Revisit Math bugs
 # Package all raw inputs securely to stop Revisit Math bugs
