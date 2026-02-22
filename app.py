@@ -748,15 +748,15 @@ with tab10:
 
     st.divider()
     
-# --- NEW: EXISTING DEBT COMMITMENTS ---
+    # --- NEW: EXISTING DEBT COMMITMENTS ---
     st.subheader("💳 Existing Debt Commitments (Monthly)")
     d1, d2, d3, d4 = st.columns(4)
 
-    # Removed the 'value=' arguments to prevent Streamlit warnings
-    ext_mortgage = d1.number_input("Existing Mortgage(s) ($)", step=100.0, key="sb_ext_mortgage")
-    ext_car_loan = d2.number_input("Car Loan(s) ($)", step=50.0, key="sb_ext_car_loan")
-    ext_cc = d3.number_input("Credit Card Payments ($)", step=50.0, help="Typically assessed at 3-4% of total limit", key="sb_ext_cc")
-    ext_other = d4.number_input("Other Loans ($)", step=50.0, key="sb_ext_other")
+    # Restored 'value=' parameters to keep your defaults, removed 'key=' to prevent warnings
+    ext_mortgage = d1.number_input("Existing Mortgage(s) ($)", value=float(st.session_state.form_data.get("ext_mortgage", 2921.0)), step=100.0)
+    ext_car_loan = d2.number_input("Car Loan(s) ($)", value=float(st.session_state.form_data.get("ext_car_loan", 0.0)), step=50.0)
+    ext_cc = d3.number_input("Credit Card Payments ($)", value=float(st.session_state.form_data.get("ext_cc", 0.0)), step=50.0, help="Typically assessed at 3-4% of total limit")
+    ext_other = d4.number_input("Other Loans ($)", value=float(st.session_state.form_data.get("ext_other", 0.0)), step=50.0)
     
     total_existing_debt_m = ext_mortgage + ext_car_loan + ext_cc + ext_other
     st.divider()
