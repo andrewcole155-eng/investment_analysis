@@ -37,8 +37,8 @@ DEFAULT_LIVING_EXPENSES_DATA = [
 ]
 
 # --- PAGE SETUP ---
-st.set_page_config(page_title="Investment Analysis", layout="wide")
-st.title("🏙️ Property Investment Analyser")
+st.set_page_config(page_title="Property Insights and Analysis", layout="wide")
+st.title("🏙️ AQI Property Intelligence")
 st.markdown("---")
 
 # --- LOCAL DATABASE CONFIG ---
