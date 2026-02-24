@@ -396,7 +396,7 @@ st.sidebar.button(
     use_container_width=True, 
     help="Fetch median price based on location, beds, baths, and cars",
     on_click=update_estimated_price_callback
-):
+)
     with st.spinner("Estimating median market price..."):
         est_price = fetch_median_price(property_name, beds, baths, cars)
         if est_price:
