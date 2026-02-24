@@ -201,6 +201,33 @@ def fetch_market_yield(address, beds, baths, cars):
         # Fails gracefully if API is down, key is missing, or parsing fails
         return None
 
+# --- NEW: AI MEDIAN PRICE ESTIMATOR ---
+@st.cache_data(ttl=3600, show_spinner=False)
+def fetch_median_price(address, beds, baths, cars):
+    """Fetches estimated median purchase price from Gemini based on location and specs."""
+    try:
+        api_key = st.secrets["GEMINI_API_KEY"]
+        genai.configure(api_key=api_key)
+        
+        # Using flash model as per preferred settings
+        model = genai.GenerativeModel('gemini-2.0-flash') 
+        
+        prompt = (
+            f"Estimate the median purchase price in AUD for a {beds} bedroom, "
+            f"{baths} bathroom, {cars} car space residential property located in or around '{address}'. "
+            "Respond with ONLY a single numerical value representing the price (e.g., 650000). "
+            "Do not include the $ sign, commas, or any other text. If exact data is unavailable, provide your best realistic estimate."
+        )
+        
+        response = model.generate_content(prompt)
+        
+        # Clean the output to ensure it's a float
+        clean_val = response.text.strip().replace('$', '').replace(',', '')
+        return float(clean_val)
+    except Exception as e:
+        print(f"⚠️ AI API Error (Price Estimate): {e}")
+        return None
+
 # --- COMPREHENSIVE AI ESTIMATOR ---
 @st.cache_data(ttl=3600, show_spinner=False)
 def fetch_comprehensive_estimates(address, price, beds, baths, cars):
@@ -346,6 +373,17 @@ baths = col_spec2.number_input("Baths", step=1, key="sb_baths")
 cars = col_spec3.number_input("Cars", step=1, key="sb_cars")
 
 purchase_price = st.sidebar.number_input("Purchase Price ($)", step=10000.0, key="sb_price")
+
+# --- NEW: AI Auto-Estimate Price Button ---
+if st.sidebar.button("🤖 Estimate Median Price", use_container_width=True, help="Fetch median price based on location, beds, baths, and cars"):
+    with st.spinner("Estimating median market price..."):
+        est_price = fetch_median_price(property_name, beds, baths, cars)
+        if est_price:
+            st.session_state.sb_price = est_price
+            st.session_state.form_data["price"] = est_price
+            st.rerun()
+        else:
+            st.sidebar.error("Failed to estimate price. Check API limits or logs.")
 
 st.sidebar.subheader("Tax Profiles (Post-Tax)")
 
