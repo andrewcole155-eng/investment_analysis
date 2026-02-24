@@ -390,21 +390,13 @@ cars = col_spec3.number_input("Cars", step=1, key="sb_cars")
 
 purchase_price = st.sidebar.number_input("Purchase Price ($)", step=10000.0, key="sb_price")
 
-# --- NEW: AI Auto-Estimate Price Button ---
+# --- NEW: AI Auto-Estimate Price Button (Callback Version) ---
 st.sidebar.button(
     "🤖 Estimate Median Price", 
     use_container_width=True, 
     help="Fetch median price based on location, beds, baths, and cars",
     on_click=update_estimated_price_callback
 )
-    with st.spinner("Estimating median market price..."):
-        est_price = fetch_median_price(property_name, beds, baths, cars)
-        if est_price:
-            st.session_state.sb_price = est_price
-            st.session_state.form_data["price"] = est_price
-            st.rerun()
-        else:
-            st.sidebar.error("Failed to estimate price. Check API limits or logs.")
 
 st.sidebar.subheader("Tax Profiles (Post-Tax)")
 
