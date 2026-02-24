@@ -362,20 +362,17 @@ tab0, tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10 = st.tabs([
 ])
 
 def update_estimated_price_callback():
-    """Callback to fetch and update the median price safely before UI renders."""
-    # Pull current values directly from session state
+    """Callback to fetch and store the median price without overwriting the purchase price."""
     address = st.session_state.sb_prop_name
     b = st.session_state.sb_beds
     ba = st.session_state.sb_baths
     c = st.session_state.sb_cars
     
-    # Fetch the estimate
     est_price = fetch_median_price(address, b, ba, c)
     
-    # Safely update the widget state and form data
     if est_price:
-        st.session_state.sb_price = float(est_price)
-        st.session_state.form_data["price"] = float(est_price)
+        # CRITICAL FIX: Save to a NEW variable, do NOT overwrite sb_price
+        st.session_state.est_median_price = float(est_price)
 
 # --- 1. GLOBAL INPUTS (SIDEBAR) ---
 st.sidebar.header("📍 Core Parameters")
@@ -397,6 +394,10 @@ st.sidebar.button(
     help="Fetch median price based on location, beds, baths, and cars",
     on_click=update_estimated_price_callback
 )
+
+# Display the estimate in the sidebar if it has been fetched
+if "est_median_price" in st.session_state:
+    st.sidebar.info(f"**Est. Suburb Median:** ${st.session_state.est_median_price:,.0f}")
 
 st.sidebar.subheader("Tax Profiles (Post-Tax)")
 
