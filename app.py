@@ -361,6 +361,22 @@ tab0, tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10 = st.tabs([
     "Living Expenses"  # NEW TAB
 ])
 
+def update_estimated_price_callback():
+    """Callback to fetch and update the median price safely before UI renders."""
+    # Pull current values directly from session state
+    address = st.session_state.sb_prop_name
+    b = st.session_state.sb_beds
+    ba = st.session_state.sb_baths
+    c = st.session_state.sb_cars
+    
+    # Fetch the estimate
+    est_price = fetch_median_price(address, b, ba, c)
+    
+    # Safely update the widget state and form data
+    if est_price:
+        st.session_state.sb_price = float(est_price)
+        st.session_state.form_data["price"] = float(est_price)
+
 # --- 1. GLOBAL INPUTS (SIDEBAR) ---
 st.sidebar.header("📍 Core Parameters")
 
@@ -375,7 +391,12 @@ cars = col_spec3.number_input("Cars", step=1, key="sb_cars")
 purchase_price = st.sidebar.number_input("Purchase Price ($)", step=10000.0, key="sb_price")
 
 # --- NEW: AI Auto-Estimate Price Button ---
-if st.sidebar.button("🤖 Estimate Median Price", use_container_width=True, help="Fetch median price based on location, beds, baths, and cars"):
+st.sidebar.button(
+    "🤖 Estimate Median Price", 
+    use_container_width=True, 
+    help="Fetch median price based on location, beds, baths, and cars",
+    on_click=update_estimated_price_callback
+):
     with st.spinner("Estimating median market price..."):
         est_price = fetch_median_price(property_name, beds, baths, cars)
         if est_price:
