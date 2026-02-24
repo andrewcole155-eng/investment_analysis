@@ -878,6 +878,7 @@ def generate_pdf(salary_1_annual, salary_2_annual, total_monthly_living, total_e
 
     market_yield = fetch_market_yield(property_name, beds, baths, cars)
     property_yield = (annual_gross_income / purchase_price) * 100
+    median_price = fetch_median_price(property_name, beds, baths, cars)
 
     class InvestmentReportPDF(FPDF):
         def header(self):
@@ -931,11 +932,44 @@ def generate_pdf(salary_1_annual, salary_2_annual, total_monthly_living, total_e
     pdf.ln(3)
 
     # --- 1. ACQUISITION & FINANCE ---
-    # 2. UPDATE THIS HEADER TO INCLUDE THE AI TAG
     pdf.section_header(f"1. Acquisition & Finance (100% Debt Funded Structure){ai_tag}")
     
     pdf.row("Purchase Price:", f"${purchase_price:,.0f}", "Core Loan Amount:", f"${loan_amount:,.0f} ({lvr_pct*100:.0f}% LVR)")
     
+    # --- NEW: AI Median Price & Variance Row ---
+    if median_price:
+        variance = purchase_price - median_price
+        
+        # Manually constructing the row to allow split text coloring for the variance
+        pdf.set_font("helvetica", "", 10)
+        pdf.cell(50, 7, "Est. Suburb Median:", border=0)
+        pdf.set_font("helvetica", "B", 10)
+        pdf.cell(45, 7, f"${median_price:,.0f}", border=0)
+        
+        pdf.set_font("helvetica", "", 10)
+        pdf.cell(50, 7, "Purchase vs Median:", border=0)
+        
+        # Color logic: Green = Below median (Good), Red = Above median (Premium)
+        if variance > 0:
+            pdf.set_text_color(200, 0, 0) # Red
+            var_text = f"+ ${variance:,.0f} (Above)"
+        elif variance < 0:
+            pdf.set_text_color(0, 128, 0) # Green
+            var_text = f"- ${abs(variance):,.0f} (Below)"
+        else:
+            pdf.set_text_color(0, 102, 204) # Blue
+            var_text = "At Exact Median"
+            
+        pdf.set_font("helvetica", "B", 10)
+        pdf.cell(0, 7, var_text, border=0, new_x="LMARGIN", new_y="NEXT")
+        pdf.set_text_color(0, 0, 0) # Reset to black for the next rows
+    else:
+        # Fallback if the AI API fails to return a price
+        pdf.set_text_color(150, 150, 150)
+        pdf.row("Est. Suburb Median:", "Data Unavailable", "Purchase vs Median:", "N/A")
+        pdf.set_text_color(0, 0, 0)
+    
+    # --- Back to Standard Rows ---
     if use_equity:
         pdf.row("Total Entry Costs:", f"${total_acquisition_costs:,.0f}", "Equity Release Loan:", f"${eq_amount:,.0f}")
         pdf.set_text_color(0, 128, 0) # Green for zero cash
