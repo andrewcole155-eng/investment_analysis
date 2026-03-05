@@ -228,37 +228,43 @@ def fetch_median_price(address, beds, baths, cars):
         print(f"⚠️ AI API Error (Price Estimate): {e}")
         return None
 
-# --- COMPREHENSIVE AI ESTIMATOR ---
 @st.cache_data(ttl=3600, show_spinner=False)
 def fetch_comprehensive_estimates(address, price, beds, baths, cars):
     """Fetches comprehensive property estimates returned as a JSON object."""
     try:
         api_key = st.secrets["GEMINI_API_KEY"]
         genai.configure(api_key=api_key)
-        
-        # Using gemini-2.0-flash as per system preference
         model = genai.GenerativeModel('gemini-2.0-flash') 
         
+        # ### UPDATED PROMPT: Specific to Investment Property & VIC Compliance
         prompt = f"""
-        You are an expert Australian real estate AI. Provide realistic estimated investment figures for a {beds} bed, {baths} bath, {cars} car property located in '{address}' purchasing for ${price}.
+        You are an expert Australian real estate AI specializing in Melbourne/Victoria investment properties. 
+        Provide realistic estimated investment figures for a {beds} bed, {baths} bath, {cars} car property located in '{address}' purchasing for ${price}.
         
-        Return ONLY a valid JSON object with the following exact keys and numerical values (no symbols, no text outside the JSON). If exact data is unknown, provide realistic state/suburb averages:
+        CRITICAL INSTRUCTIONS:
+        1. This is an INVESTMENT property. The owner pays for fixed water charges, land tax, and council rates.
+        2. Include VIC Mandatory Safety Checks: Annualize the $600 biennial Gas/Elec safety check and $120 annual smoke alarm service (~$35/month total).
+        3. If the property is in Melbourne, include a realistic Land Tax estimate for an investment (threshold $50k).
+        
+        Return ONLY a valid JSON object with the following exact keys and numerical values:
         {{
             "stamp_duty": 34100.0,
             "legal_fees": 1500.0,
             "building_pest": 600.0,
             "monthly_rent": 3683.33,
-            "vacancy_pct": 5.0,
+            "vacancy_pct": 3.0,
             "mgt_fee_m": 276.25,
             "strata_m": 500.0,
             "insurance_m": 45.0,
             "rates_m": 165.0,
-            "maint_m": 150.0,
+            "maint_m": 185.0, 
             "water_m": 80.0,
+            "other_m": 50.0,
             "div_43": 9000.0,
             "div_40": 8500.0,
             "expected_annual_growth": 5.0
         }}
+        Note: Ensure 'maint_m' includes the VIC compliance safety check buffer (~$35/mo).
         """
         
         response = model.generate_content(
@@ -268,7 +274,6 @@ def fetch_comprehensive_estimates(address, price, beds, baths, cars):
         
         return json.loads(response.text)
     except Exception as e:
-        # Print the exact error to your terminal/console so you can debug it
         print(f"⚠️ AI API Error: {e}")
         return None
 
@@ -502,26 +507,37 @@ with tab1:
 
 # --- TAB 2: INCOME & EXPENSES ---
 with tab2:
-    st.subheader("Cash Flow Essentials (Monthly Sourced)")
+    st.subheader("Investment Income & Holding Expenses")
+    st.info("💡 **Note:** Per Victorian law, usage (electricity/gas/water usage) is paid by the renter if separately metered. As the owner, you are responsible for the items below.")
+    
     c1, c2 = st.columns(2)
     
     monthly_rent = c1.number_input("Monthly Rent Received ($)", value=float(st.session_state.form_data.get("monthly_rent", 3683.33)), step=100.0)
     vacancy_pct = c1.number_input("Vacancy Rate (%)", value=float(st.session_state.form_data.get("vacancy_pct", 5.0)), step=1.0)
     
-    # ---> THE MISSING MATH LINE IS BACK <---
     annual_gross_income = (monthly_rent * 12) * (1 - (vacancy_pct / 100))
     
-    mgt_fee_m = c2.number_input("Property Management (Monthly $)", value=float(st.session_state.form_data.get("mgt_fee_m", 276.25)), step=10.0)
+    # ### UPDATED: Descriptions reflect Investment vs Living Expenses
+    mgt_fee_m = c2.number_input("Property Management (Monthly $)", value=float(st.session_state.form_data.get("mgt_fee_m", 276.25)), step=10.0, help="Usually 5-7% + GST")
     strata_m = c2.number_input("Strata/Body Corporate (Monthly $)", value=float(st.session_state.form_data.get("strata_m", 500.0)), step=10.0)
     insurance_m = c2.number_input("Landlord Insurance (Monthly $)", value=float(st.session_state.form_data.get("insurance_m", 45.0)), step=5.0)
-    rates_m = c2.number_input("Council Rates (Monthly $)", value=float(st.session_state.form_data.get("rates_m", 165.0)), step=10.0)
-    maint_m = c2.number_input("Maintenance (Monthly $)", value=float(st.session_state.form_data.get("maint_m", 150.0)), step=10.0)
-    water_m = c2.number_input("Water Service (Monthly $)", value=float(st.session_state.form_data.get("water_m", 80.0)), step=5.0)
-    other_m = c2.number_input("Other (Monthly $)", value=float(st.session_state.form_data.get("other_m", 25.0)), step=5.0)
+    rates_m = c2.number_input("Investment Council Rates (Monthly $)", value=float(st.session_state.form_data.get("rates_m", 165.0)), step=10.0)
     
-    # ---> THE EXPENSE MATH LINES ARE BACK <---
+    # AI auto-estimation will prioritize putting compliance checks here
+    maint_m = c2.number_input("Maint & Compliance Buffer (Monthly $)", value=float(st.session_state.form_data.get("maint_m", 150.0)), step=10.0, help="Includes VIC Safety Checks: ~$35/mo")
+    
+    water_m = c2.number_input("Fixed Water Service (Monthly $)", value=float(st.session_state.form_data.get("water_m", 80.0)), step=5.0, help="Tenant pays usage; Owner pays service/parks.")
+    
+    # AI will use this for Land Tax estimates
+    other_m = c2.number_input("Land Tax / Other (Monthly $)", value=float(st.session_state.form_data.get("other_m", 25.0)), step=5.0)
+    
     total_monthly_expenses = mgt_fee_m + strata_m + insurance_m + rates_m + maint_m + water_m + other_m
     total_operating_expenses = total_monthly_expenses * 12
+    
+    st.divider()
+    metric_col1, metric_col2 = st.columns(2)
+    metric_col1.metric("Gross Annual Rental Income", f"${annual_gross_income:,.2f}")
+    metric_col2.metric("Total Annual Holding Costs", f"${total_operating_expenses:,.2f}")
     
     st.divider()
     metric_col1, metric_col2 = st.columns(2)
@@ -1017,7 +1033,7 @@ def generate_pdf(salary_1_annual, salary_2_annual, total_monthly_living, total_e
 
     pdf.row(f"Gross Rent ({vacancy_pct:.1f}% Vac):", f"${annual_gross_income:,.0f}", "Operating Expenses:", f"-${total_operating_expenses:,.0f}")
     pdf.set_font("helvetica", "I", 8); pdf.set_text_color(120, 120, 120)
-    pdf.cell(95, 4, "", border=0); pdf.cell(0, 4, f"(Strata: ${strata_m*12:,.0f} | Mgt: ${mgt_fee_m*12:,.0f} | Other: ${(rates_m+water_m+insurance_m+maint_m+other_m)*12:,.0f})", border=0, new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(95, 4, "", border=0); pdf.cell(0, 4, f"(Strata: ${strata_m*12:,.0f} | Mgt: ${mgt_fee_m*12:,.0f} | Rates/Water/Maint/Tax: ${(rates_m+water_m+insurance_m+maint_m+other_m)*12:,.0f})", border=0, new_x="LMARGIN", new_y="NEXT")
     pdf.set_text_color(0, 0, 0); pdf.ln(1)
     
     pdf.row("Total Interest Deductible:", f"-${total_tax_deductible_interest:,.0f}", "Net Property Cash Flow:", f"${pre_tax_cf:,.2f}")
